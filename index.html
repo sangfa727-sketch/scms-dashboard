@@ -6,278 +6,129 @@
 <title>SCMS — Students Dashboard</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  /* ============== DESIGN TOKENS ============== */
   :root {
-    --bg: #0f1115;
-    --surface: #181b22;
-    --surface-elev: #21252e;
-    --border: #2a2f3a;
-    --text: #e8eaed;
-    --text-dim: #9aa0a6;
-    --text-faint: #6b7280;
-    --accent: #ffb300;       /* amber — confident, school-y */
-    --accent-soft: rgba(255, 179, 0, 0.12);
-    --danger: #ef4444;
-    --success: #10b981;
-    --house-red:    #e35353;
-    --house-blue:   #4a90e2;
-    --house-green:  #48a868;
-    --house-yellow: #f0c545;
-
-    --r-sm: 6px;
-    --r-md: 10px;
-    --r-lg: 14px;
-    --shadow: 0 8px 30px rgba(0,0,0,0.4);
+    --bg: #0f1115; --surface: #181b22; --surface-elev: #21252e;
+    --border: #2a2f3a; --text: #e8eaed; --text-dim: #9aa0a6; --text-faint: #6b7280;
+    --accent: #ffb300; --accent-soft: rgba(255, 179, 0, 0.12);
+    --danger: #ef4444; --success: #10b981;
+    --house-red: #e35353; --house-blue: #4a90e2; --house-green: #48a868; --house-yellow: #f0c545;
+    --r-md: 10px; --r-lg: 14px; --shadow: 0 8px 30px rgba(0,0,0,0.4);
   }
-
-  /* Telegram theme override (light) */
   body.tg-light {
-    --bg: #f4f5f7;
-    --surface: #ffffff;
-    --surface-elev: #ffffff;
-    --border: #e3e6ea;
-    --text: #1a1d23;
-    --text-dim: #5f6368;
-    --text-faint: #9aa0a6;
+    --bg: #f4f5f7; --surface: #ffffff; --surface-elev: #ffffff;
+    --border: #e3e6ea; --text: #1a1d23; --text-dim: #5f6368; --text-faint: #9aa0a6;
     --shadow: 0 4px 18px rgba(0,0,0,0.08);
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
   html, body {
-    background: var(--bg);
-    color: var(--text);
+    background: var(--bg); color: var(--text);
     font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 15px;
-    line-height: 1.5;
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
+    font-size: 15px; line-height: 1.5; min-height: 100vh; -webkit-font-smoothing: antialiased;
   }
-
-  /* ============== HEADER ============== */
   .topbar {
     position: sticky; top: 0; z-index: 10;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 16px 12px;
-    backdrop-filter: blur(10px);
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 16px 12px; backdrop-filter: blur(10px);
   }
-  .topbar h1 {
-    font-size: 18px; font-weight: 700;
-    letter-spacing: -0.01em;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .topbar h1::before {
-    content: '🏫';
-    font-size: 20px;
-  }
-  .meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+  .topbar h1::before { content: '🏫'; font-size: 20px; }
+  .meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; word-break: break-word; }
   .meta strong { color: var(--accent); }
-
-  /* ============== SEARCH + FILTER ============== */
-  .controls {
-    padding: 12px 16px;
-    display: flex; gap: 8px; flex-wrap: wrap;
-  }
+  .controls { padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
   .search {
-    flex: 1; min-width: 0;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r-md); padding: 9px 12px;
-    color: var(--text); font-size: 14px;
+    flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 9px 12px; color: var(--text); font-size: 14px;
     transition: border-color 0.15s;
   }
   .search:focus { outline: none; border-color: var(--accent); }
   .filter-pill {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 999px; padding: 6px 12px;
-    font-size: 12px; color: var(--text-dim);
-    cursor: pointer; white-space: nowrap;
-    transition: all 0.15s;
+    border-radius: 999px; padding: 6px 12px; font-size: 12px;
+    color: var(--text-dim); cursor: pointer; white-space: nowrap; transition: all 0.15s;
   }
-  .filter-pill.active {
-    background: var(--accent-soft); border-color: var(--accent);
-    color: var(--accent); font-weight: 600;
-  }
-
-  .pills-row {
-    padding: 0 16px 12px; display: flex; gap: 6px; overflow-x: auto;
-    scrollbar-width: none;
-  }
+  .filter-pill.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .pills-row { padding: 0 16px 12px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .pills-row::-webkit-scrollbar { display: none; }
-
-  /* ============== TABLE / LIST ============== */
   .list { padding: 0 12px 100px; display: flex; flex-direction: column; gap: 8px; }
   .student-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 12px 14px;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 12px;
-    align-items: center;
-    transition: transform 0.1s, border-color 0.15s;
-    cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 12px 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px;
+    align-items: center; transition: transform 0.1s, border-color 0.15s; cursor: pointer;
   }
   .student-card:active { transform: scale(0.98); }
   .student-card:hover { border-color: var(--accent); }
-
   .avatar {
     width: 38px; height: 38px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 14px; color: #fff;
-    flex-shrink: 0;
+    font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0;
   }
   .avatar.house-Red    { background: var(--house-red); }
   .avatar.house-Blue   { background: var(--house-blue); }
   .avatar.house-Green  { background: var(--house-green); }
   .avatar.house-Yellow { background: var(--house-yellow); color: #333; }
   .avatar.house-      { background: var(--text-faint); }
-
   .student-info { min-width: 0; }
-  .student-name {
-    font-weight: 600; font-size: 15px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .student-sub {
-    font-size: 12px; color: var(--text-dim);
-    display: flex; gap: 8px; margin-top: 2px;
-  }
+  .student-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .student-sub { font-size: 12px; color: var(--text-dim); display: flex; gap: 8px; margin-top: 2px; }
   .student-sub .dot { color: var(--text-faint); }
-
-  .badge {
-    background: var(--accent-soft); color: var(--accent);
-    font-size: 11px; font-weight: 600;
-    padding: 3px 8px; border-radius: 999px;
-    flex-shrink: 0;
-  }
-
-  /* ============== EMPTY / LOADING ============== */
-  .state {
-    text-align: center; padding: 60px 20px;
-    color: var(--text-dim);
-  }
+  .badge { background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; flex-shrink: 0; }
+  .state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
   .state-emoji { font-size: 40px; margin-bottom: 8px; }
-  .state-msg { font-size: 14px; }
-
-  /* ============== FAB ============== */
+  .state-msg { font-size: 14px; word-break: break-word; }
+  .state-detail { font-size: 11px; color: var(--text-faint); margin-top: 12px; word-break: break-all; padding: 0 16px; line-height: 1.6; }
   .fab {
-    position: fixed; right: 16px; bottom: 16px;
-    width: 56px; height: 56px; border-radius: 50%;
-    background: var(--accent); color: #1a1d23;
-    border: none; font-size: 26px; font-weight: 700;
-    box-shadow: var(--shadow);
-    cursor: pointer; z-index: 5;
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.15s;
+    position: fixed; right: 16px; bottom: 16px; width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); color: #1a1d23; border: none; font-size: 26px; font-weight: 700;
+    box-shadow: var(--shadow); cursor: pointer; z-index: 5;
+    display: flex; align-items: center; justify-content: center; transition: transform 0.15s;
   }
   .fab:active { transform: scale(0.92); }
-
-  /* ============== MODAL ============== */
   .modal-backdrop {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 100;
-    display: none;
-    align-items: flex-end;
-    animation: fade-in 0.15s ease-out;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+    display: none; align-items: flex-end; animation: fade-in 0.15s ease-out;
   }
   .modal-backdrop.show { display: flex; }
   .modal {
     background: var(--surface); width: 100%;
-    border-radius: var(--r-lg) var(--r-lg) 0 0;
-    padding: 20px 18px 24px;
-    max-height: 92vh; overflow-y: auto;
-    animation: slide-up 0.22s ease-out;
+    border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 20px 18px 24px;
+    max-height: 92vh; overflow-y: auto; animation: slide-up 0.22s ease-out;
   }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-  .modal-title {
-    font-size: 17px; font-weight: 700;
-    margin-bottom: 16px;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .modal-close {
-    background: none; border: none; color: var(--text-dim);
-    font-size: 22px; cursor: pointer; line-height: 1;
-    padding: 4px 8px;
-  }
-
+  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .modal-close { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px 8px; }
   .form-group { margin-bottom: 12px; }
-  .form-group label {
-    display: block; font-size: 12px; color: var(--text-dim);
-    margin-bottom: 4px; font-weight: 500;
-  }
+  .form-group label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
   .form-group label .req { color: var(--danger); }
   .form-group input, .form-group select {
-    width: 100%;
-    background: var(--surface-elev); border: 1px solid var(--border);
-    border-radius: var(--r-md); padding: 10px 12px;
-    color: var(--text); font-size: 14px;
-    font-family: inherit;
+    width: 100%; background: var(--surface-elev); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 10px 12px; color: var(--text); font-size: 14px; font-family: inherit;
   }
-  .form-group input:focus, .form-group select:focus {
-    outline: none; border-color: var(--accent);
-  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-  .modal-actions {
-    display: flex; gap: 10px; margin-top: 16px;
-    border-top: 1px solid var(--border); padding-top: 14px;
-  }
-  .btn {
-    flex: 1; padding: 11px;
-    border: none; border-radius: var(--r-md);
-    font-size: 14px; font-weight: 600; cursor: pointer;
-    transition: opacity 0.15s;
-    font-family: inherit;
-  }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .btn { flex: 1; padding: 11px; border: none; border-radius: var(--r-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; font-family: inherit; }
   .btn:active { opacity: 0.7; }
   .btn-primary { background: var(--accent); color: #1a1d23; }
   .btn-secondary { background: var(--surface-elev); color: var(--text); border: 1px solid var(--border); }
   .btn-danger { background: var(--danger); color: #fff; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* ============== TOAST ============== */
   .toast {
-    position: fixed; bottom: 80px; left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface-elev); color: var(--text);
-    padding: 10px 18px; border-radius: var(--r-md);
-    border: 1px solid var(--border);
-    font-size: 13px; font-weight: 500;
-    z-index: 200;
-    box-shadow: var(--shadow);
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.2s, transform 0.2s;
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--surface-elev); color: var(--text); padding: 10px 18px;
+    border-radius: var(--r-md); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 500; z-index: 200; box-shadow: var(--shadow);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; max-width: 90vw;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
   .toast.success { border-color: var(--success); }
   .toast.error { border-color: var(--danger); }
-
-  /* ============== DETAIL VIEW ============== */
-  .detail-row {
-    display: grid; grid-template-columns: 110px 1fr;
-    padding: 8px 0; border-bottom: 1px solid var(--border);
-    font-size: 14px;
-  }
-  .detail-row:last-child { border-bottom: none; }
-  .detail-row .k { color: var(--text-dim); font-size: 12px; }
-  .detail-row .v { color: var(--text); }
-
-  /* skeleton */
   .skeleton {
     background: linear-gradient(90deg, var(--surface) 25%, var(--surface-elev) 50%, var(--surface) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: var(--r-lg);
-    height: 64px; margin-bottom: 8px;
+    background-size: 200% 100%; animation: shimmer 1.5s infinite;
+    border-radius: var(--r-lg); height: 64px; margin-bottom: 8px;
   }
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 </style>
 </head>
 <body>
@@ -300,7 +151,6 @@
 
 <button class="fab" id="fab" title="Add Student">＋</button>
 
-<!-- Add/Edit Modal -->
 <div class="modal-backdrop" id="modal">
   <div class="modal">
     <div class="modal-title">
@@ -310,70 +160,28 @@
     <form id="student-form">
       <input type="hidden" id="f_student_id" />
       <div class="form-row">
-        <div class="form-group">
-          <label>Name (Myanmar) <span class="req">*</span></label>
-          <input type="text" id="f_name_mm" required />
-        </div>
-        <div class="form-group">
-          <label>Name (English) <span class="req">*</span></label>
-          <input type="text" id="f_name_en" required />
+        <div class="form-group"><label>Name (Myanmar) <span class="req">*</span></label><input type="text" id="f_name_mm" required /></div>
+        <div class="form-group"><label>Name (English) <span class="req">*</span></label><input type="text" id="f_name_en" required /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Class <span class="req">*</span></label><select id="f_class" required></select></div>
+        <div class="form-group"><label>House Color</label>
+          <select id="f_house"><option value="">—</option><option value="Red">🔴 Red</option><option value="Blue">🔵 Blue</option><option value="Green">🟢 Green</option><option value="Yellow">🟡 Yellow</option></select>
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
-          <label>Class <span class="req">*</span></label>
-          <select id="f_class" required></select>
-        </div>
-        <div class="form-group">
-          <label>House Color</label>
-          <select id="f_house">
-            <option value="">—</option>
-            <option value="Red">🔴 Red</option>
-            <option value="Blue">🔵 Blue</option>
-            <option value="Green">🟢 Green</option>
-            <option value="Yellow">🟡 Yellow</option>
-          </select>
-        </div>
+        <div class="form-group"><label>Gender</label><select id="f_gender"><option value="">—</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+        <div class="form-group"><label>Date of Birth</label><input type="date" id="f_dob" /></div>
+      </div>
+      <div class="form-group"><label>Parent Name</label><input type="text" id="f_parent_name" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Parent Telegram ID</label><input type="text" id="f_parent_tg" inputmode="numeric" /></div>
+        <div class="form-group"><label>Parent Phone</label><input type="tel" id="f_parent_phone" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group">
-          <label>Gender</label>
-          <select id="f_gender">
-            <option value="">—</option>
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Date of Birth</label>
-          <input type="date" id="f_dob" />
-        </div>
+        <div class="form-group"><label>Phone 2 (optional)</label><input type="tel" id="f_parent_phone2" /></div>
+        <div class="form-group"><label>Parent Email</label><input type="email" id="f_parent_email" /></div>
       </div>
-      <div class="form-group">
-        <label>Parent Name</label>
-        <input type="text" id="f_parent_name" />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Parent Telegram ID</label>
-          <input type="text" id="f_parent_tg" inputmode="numeric" />
-        </div>
-        <div class="form-group">
-          <label>Parent Phone</label>
-          <input type="tel" id="f_parent_phone" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Phone 2 (optional)</label>
-          <input type="tel" id="f_parent_phone2" />
-        </div>
-        <div class="form-group">
-          <label>Parent Email</label>
-          <input type="email" id="f_parent_email" />
-        </div>
-      </div>
-
       <div class="modal-actions">
         <button type="button" class="btn btn-danger" id="btn-delete" style="display:none;">Delete</button>
         <button type="button" class="btn btn-secondary" id="btn-cancel">Cancel</button>
@@ -386,39 +194,20 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ====================================================================
-   CONFIG — set this to your n8n base URL
-   ==================================================================== */
 const API_BASE = window.SCMS_API_BASE || 'https://stailla.xyz/webhook';
-// Endpoints:
-//   GET    {API_BASE}/scms/students?tg_id=...
-//   POST   {API_BASE}/scms/students
-//   PUT    {API_BASE}/scms/students
-//   DELETE {API_BASE}/scms/students?student_id=...&tg_id=...
 
-/* ====================================================================
-   TELEGRAM WEBAPP INIT
-   ==================================================================== */
 const tg = window.Telegram?.WebApp;
 tg?.ready();
 tg?.expand();
-
 const tgUser = tg?.initDataUnsafe?.user;
 const TG_ID = tgUser?.id ? String(tgUser.id) : (new URLSearchParams(location.search).get('tg_id') || '');
-
 if (tg?.colorScheme === 'light') document.body.classList.add('tg-light');
 
-/* ====================================================================
-   STATE
-   ==================================================================== */
 let allStudents = [];
 let teacherClasses = [];
 let activeClassFilter = 'ALL';
 let currentEditId = null;
 
-/* ====================================================================
-   API CALLS
-   ==================================================================== */
 async function api(method, body) {
   const url = new URL(API_BASE + '/scms/students');
   if (method === 'GET' || method === 'DELETE') url.searchParams.set('tg_id', TG_ID);
@@ -431,20 +220,36 @@ async function api(method, body) {
   if (method === 'POST' || method === 'PUT') {
     opts.body = JSON.stringify({ ...body, tg_id: TG_ID });
   }
-  const res = await fetch(url, opts);
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok || !json.ok) throw new Error(json.error || `HTTP ${res.status}`);
+
+  let res, txt = '', json = null;
+  try {
+    res = await fetch(url, opts);
+    txt = await res.text();
+    if (txt) {
+      try { json = JSON.parse(txt); } catch (e) { /* leave json null */ }
+    }
+  } catch (netErr) {
+    throw new Error('Network: ' + netErr.message);
+  }
+
+  console.log('[API]', method, url.toString(), '→', res.status, '| body:', txt.slice(0, 300));
+
+  if (!res.ok) {
+    const msg = (json && (json.error || json._message)) || `HTTP ${res.status}: ${txt.slice(0, 100) || 'no body'}`;
+    throw new Error(msg);
+  }
+  if (!json) {
+    throw new Error('Empty response from n8n. Check workflow Active + path matches /webhook/scms/students');
+  }
+  if (json.ok === false) {
+    throw new Error(json.error || 'Server returned ok=false');
+  }
   return json;
 }
 
-/* ====================================================================
-   RENDER
-   ==================================================================== */
 function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
 }
-
 function initials(s) {
   const t = String(s || '?').trim();
   const parts = t.split(/\s+/);
@@ -465,19 +270,16 @@ function renderPills() {
 function renderList() {
   const list = document.getElementById('list');
   const q = document.getElementById('search').value.trim().toLowerCase();
-
   let filtered = allStudents.filter(s => {
     if (String(s.Status || '').toLowerCase() === 'inactive') return false;
     if (activeClassFilter !== 'ALL' && String(s.Class || '') !== activeClassFilter) return false;
     if (q && !(`${s.Name_MM} ${s.Name_EN} ${s.Class}`.toLowerCase().includes(q))) return false;
     return true;
   });
-
   if (filtered.length === 0) {
     list.innerHTML = `<div class="state"><div class="state-emoji">📭</div><div class="state-msg">No students found</div></div>`;
     return;
   }
-
   list.innerHTML = filtered.map(s => `
     <div class="student-card" data-id="${escapeHtml(s.Student_ID)}">
       <div class="avatar house-${escapeHtml(s.House_Color || '')}">${escapeHtml(initials(s.Name_EN || s.Name_MM))}</div>
@@ -490,17 +292,10 @@ function renderList() {
         </div>
       </div>
       <span class="badge">${escapeHtml(s.Class || '?')}</span>
-    </div>
-  `).join('');
-
-  list.querySelectorAll('.student-card').forEach(el =>
-    el.onclick = () => openEdit(el.dataset.id)
-  );
+    </div>`).join('');
+  list.querySelectorAll('.student-card').forEach(el => el.onclick = () => openEdit(el.dataset.id));
 }
 
-/* ====================================================================
-   MODAL
-   ==================================================================== */
 const modal = document.getElementById('modal');
 function openModal() { modal.classList.add('show'); }
 function closeModal() { modal.classList.remove('show'); currentEditId = null; }
@@ -511,8 +306,7 @@ modal.onclick = e => { if (e.target === modal) closeModal(); };
 function populateClassDropdown() {
   const sel = document.getElementById('f_class');
   const classes = teacherClasses.length ? teacherClasses : ['KG','P1','P2','P3','P4','P5'];
-  sel.innerHTML = '<option value="">— select —</option>' +
-    classes.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  sel.innerHTML = '<option value="">— select —</option>' + classes.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
 function openAdd() {
@@ -532,7 +326,6 @@ function openEdit(student_id) {
   document.getElementById('modal-title').textContent = 'Edit Student';
   document.getElementById('btn-delete').style.display = 'block';
   populateClassDropdown();
-
   document.getElementById('f_student_id').value   = s.Student_ID;
   document.getElementById('f_name_mm').value      = s.Name_MM || '';
   document.getElementById('f_name_en').value      = s.Name_EN || '';
@@ -550,12 +343,10 @@ function openEdit(student_id) {
 
 document.getElementById('fab').onclick = openAdd;
 
-/* Form submit (Add or Edit) */
 document.getElementById('student-form').onsubmit = async (e) => {
   e.preventDefault();
   const btn = document.getElementById('btn-save');
   btn.disabled = true; btn.textContent = 'Saving…';
-
   const payload = {
     Student_ID:    document.getElementById('f_student_id').value || undefined,
     Name_MM:       document.getElementById('f_name_mm').value.trim(),
@@ -570,13 +361,11 @@ document.getElementById('student-form').onsubmit = async (e) => {
     Parent_Phone2: document.getElementById('f_parent_phone2').value.trim(),
     Parent_Email:  document.getElementById('f_parent_email').value.trim()
   };
-
   try {
     if (currentEditId) {
       await api('PUT', payload);
       toast('✓ Student updated', 'success');
     } else {
-      // For POST the API expects lowercase keys (matches Telegram bot flow)
       const postPayload = {
         name_mm: payload.Name_MM, name_en: payload.Name_EN,
         class: payload.Class, house_color: payload.House_Color,
@@ -597,7 +386,6 @@ document.getElementById('student-form').onsubmit = async (e) => {
   }
 };
 
-/* Delete */
 document.getElementById('btn-delete').onclick = async () => {
   if (!currentEditId) return;
   const sure = await confirmDialog('Delete this student?');
@@ -619,19 +407,13 @@ function confirmDialog(msg) {
   });
 }
 
-/* ====================================================================
-   TOAST
-   ==================================================================== */
 function toast(msg, type = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.className = 'toast show ' + type;
-  setTimeout(() => { el.className = 'toast ' + type; }, 2500);
+  setTimeout(() => { el.className = 'toast ' + type; }, 4000);
 }
 
-/* ====================================================================
-   LOAD
-   ==================================================================== */
 async function loadStudents() {
   try {
     if (!TG_ID) {
@@ -648,13 +430,20 @@ async function loadStudents() {
     renderList();
   } catch (err) {
     document.getElementById('meta').textContent = '✗ ' + err.message;
-    document.getElementById('list').innerHTML = `<div class="state"><div class="state-emoji">⚠</div><div class="state-msg">${escapeHtml(err.message)}</div></div>`;
+    document.getElementById('list').innerHTML = `
+      <div class="state">
+        <div class="state-emoji">⚠</div>
+        <div class="state-msg">${escapeHtml(err.message)}</div>
+        <div class="state-detail">
+          API: ${escapeHtml(API_BASE)}/scms/students<br>
+          TG_ID: ${escapeHtml(TG_ID || '(none)')}<br>
+          Open browser DevTools (Console) for full request log.
+        </div>
+      </div>`;
   }
 }
 
 document.getElementById('search').oninput = renderList;
-
-/* boot */
 loadStudents();
 </script>
 </body>
