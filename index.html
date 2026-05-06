@@ -3,16 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>SCMS — Students Dashboard</title>
+<title>SCMS — Dashboard</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
     --bg: #0f1115; --surface: #181b22; --surface-elev: #21252e;
     --border: #2a2f3a; --text: #e8eaed; --text-dim: #9aa0a6; --text-faint: #6b7280;
     --accent: #ffb300; --accent-soft: rgba(255, 179, 0, 0.12);
-    --danger: #ef4444; --success: #10b981;
+    --danger: #ef4444; --success: #10b981; --info: #3b82f6;
     --house-red: #e35353; --house-blue: #4a90e2; --house-green: #48a868; --house-yellow: #f0c545;
     --r-md: 10px; --r-lg: 14px; --shadow: 0 8px 30px rgba(0,0,0,0.4);
+    --nav-h: 64px;
   }
   body.tg-light {
     --bg: #f4f5f7; --surface: #ffffff; --surface-elev: #ffffff;
@@ -24,39 +25,44 @@
     background: var(--bg); color: var(--text);
     font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 15px; line-height: 1.5; min-height: 100vh; -webkit-font-smoothing: antialiased;
+    padding-bottom: var(--nav-h);
   }
   .topbar {
     position: sticky; top: 0; z-index: 10;
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 14px 16px 12px; backdrop-filter: blur(10px);
   }
-  .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
-  .topbar h1::before { content: '🏫'; font-size: 20px; }
+  .topbar h1 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .topbar h1 .icon { font-size: 20px; }
   .meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; word-break: break-word; }
   .meta strong { color: var(--accent); }
-  .controls { padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .controls { padding: 12px 16px 0; display: flex; gap: 8px; flex-wrap: wrap; }
   .search {
     flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--r-md); padding: 9px 12px; color: var(--text); font-size: 14px;
-    transition: border-color 0.15s;
   }
   .search:focus { outline: none; border-color: var(--accent); }
+  .pills-row { padding: 10px 16px 12px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; align-items: center; }
+  .pills-row::-webkit-scrollbar { display: none; }
   .filter-pill {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 999px; padding: 6px 12px; font-size: 12px;
-    color: var(--text-dim); cursor: pointer; white-space: nowrap; transition: all 0.15s;
+    color: var(--text-dim); cursor: pointer; white-space: nowrap; flex-shrink: 0;
   }
   .filter-pill.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-  .pills-row { padding: 0 16px 12px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-  .pills-row::-webkit-scrollbar { display: none; }
-  .list { padding: 0 12px 100px; display: flex; flex-direction: column; gap: 8px; }
-  .student-card {
+
+  .tab-content { display: none; padding: 0 12px; min-height: 50vh; }
+  .tab-content.active { display: block; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; }
+  .row-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 12px 14px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px;
-    align-items: center; transition: transform 0.1s, border-color 0.15s; cursor: pointer;
+    padding: 12px 14px; cursor: pointer; transition: transform 0.1s, border-color 0.15s;
   }
-  .student-card:active { transform: scale(0.98); }
-  .student-card:hover { border-color: var(--accent); }
+  .row-card:active { transform: scale(0.98); }
+  .row-card:hover { border-color: var(--accent); }
+  .row-flex { display: flex; align-items: center; gap: 12px; }
   .avatar {
     width: 38px; height: 38px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
@@ -67,27 +73,67 @@
   .avatar.house-Green  { background: var(--house-green); }
   .avatar.house-Yellow { background: var(--house-yellow); color: #333; }
   .avatar.house-      { background: var(--text-faint); }
-  .student-info { min-width: 0; }
-  .student-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .student-sub { font-size: 12px; color: var(--text-dim); display: flex; gap: 8px; margin-top: 2px; }
-  .student-sub .dot { color: var(--text-faint); }
+  .row-info { min-width: 0; flex: 1; }
+  .row-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row-sub .dot { color: var(--text-faint); }
   .badge { background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; flex-shrink: 0; }
+  .badge.success { background: rgba(16,185,129,0.15); color: var(--success); }
+  .badge.danger  { background: rgba(239,68,68,0.15); color: var(--danger); }
+  .badge.info    { background: rgba(59,130,246,0.15); color: var(--info); }
+  .badge.muted   { background: var(--surface-elev); color: var(--text-dim); }
+
+  .timetable-day {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    margin-bottom: 8px; overflow: hidden;
+  }
+  .day-header {
+    background: var(--surface-elev); padding: 10px 14px;
+    font-weight: 600; font-size: 14px; color: var(--accent);
+  }
+  .period-row {
+    display: grid; grid-template-columns: 60px 1fr auto;
+    gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); align-items: center; font-size: 13px;
+  }
+  .period-time { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+
   .state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
   .state-emoji { font-size: 40px; margin-bottom: 8px; }
   .state-msg { font-size: 14px; word-break: break-word; }
   .state-detail { font-size: 11px; color: var(--text-faint); margin-top: 12px; word-break: break-all; padding: 0 16px; line-height: 1.6; }
+
   .fab {
-    position: fixed; right: 16px; bottom: 16px; width: 56px; height: 56px; border-radius: 50%;
+    position: fixed; right: 16px; bottom: calc(var(--nav-h) + 12px); width: 56px; height: 56px; border-radius: 50%;
     background: var(--accent); color: #1a1d23; border: none; font-size: 26px; font-weight: 700;
     box-shadow: var(--shadow); cursor: pointer; z-index: 5;
-    display: flex; align-items: center; justify-content: center; transition: transform 0.15s;
+    display: none; align-items: center; justify-content: center;
   }
+  .fab.show { display: flex; }
   .fab:active { transform: scale(0.92); }
+
+  .bottomnav {
+    position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h);
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around; align-items: center;
+    z-index: 8; overflow-x: auto; scrollbar-width: none; padding: 0 4px;
+  }
+  .bottomnav::-webkit-scrollbar { display: none; }
+  .nav-item {
+    flex: 1 0 auto; min-width: 64px; max-width: 90px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 6px 4px; cursor: pointer;
+    color: var(--text-faint); font-size: 10px; line-height: 1.2;
+    text-align: center; border: none; background: none; font-family: inherit;
+  }
+  .nav-item .nav-emoji { font-size: 20px; margin-bottom: 2px; }
+  .nav-item.active { color: var(--accent); font-weight: 600; }
+  .nav-item:active { transform: scale(0.94); }
+
   .modal-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
-    display: none; align-items: flex-end; animation: fade-in 0.15s ease-out;
+    display: none; align-items: flex-end;
   }
-  .modal-backdrop.show { display: flex; }
+  .modal-backdrop.show { display: flex; animation: fade-in 0.15s ease-out; }
   .modal {
     background: var(--surface); width: 100%;
     border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 20px 18px 24px;
@@ -100,21 +146,27 @@
   .form-group { margin-bottom: 12px; }
   .form-group label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
   .form-group label .req { color: var(--danger); }
-  .form-group input, .form-group select {
+  .form-group input, .form-group select, .form-group textarea {
     width: 100%; background: var(--surface-elev); border: 1px solid var(--border);
     border-radius: var(--r-md); padding: 10px 12px; color: var(--text); font-size: 14px; font-family: inherit;
   }
-  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .modal-actions { display: flex; gap: 10px; margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; }
-  .btn { flex: 1; padding: 11px; border: none; border-radius: var(--r-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; font-family: inherit; }
+  .btn { flex: 1; padding: 11px; border: none; border-radius: var(--r-md); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
   .btn:active { opacity: 0.7; }
   .btn-primary { background: var(--accent); color: #1a1d23; }
   .btn-secondary { background: var(--surface-elev); color: var(--text); border: 1px solid var(--border); }
   .btn-danger { background: var(--danger); color: #fff; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-dim); flex-shrink: 0; margin-right: 12px; }
+  .detail-value { color: var(--text); text-align: right; word-break: break-word; }
+
   .toast {
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: calc(var(--nav-h) + 16px); left: 50%; transform: translateX(-50%);
     background: var(--surface-elev); color: var(--text); padding: 10px 18px;
     border-radius: var(--r-md); border: 1px solid var(--border);
     font-size: 13px; font-weight: 500; z-index: 200; box-shadow: var(--shadow);
@@ -123,39 +175,237 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
   .toast.success { border-color: var(--success); }
   .toast.error { border-color: var(--danger); }
+
   .skeleton {
     background: linear-gradient(90deg, var(--surface) 25%, var(--surface-elev) 50%, var(--surface) 75%);
     background-size: 200% 100%; animation: shimmer 1.5s infinite;
     border-radius: var(--r-lg); height: 64px; margin-bottom: 8px;
   }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  .tab-header {
+    padding: 12px 16px 6px;
+    font-size: 12px; color: var(--text-dim);
+  }
+
+  /* ========= BULK ADD TAB ========= */
+  .bulk-toolbar {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 10px 12px; margin-bottom: 10px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .bulk-toolbar .field {
+    flex: 1; min-width: 140px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .bulk-toolbar label { font-size: 11px; color: var(--text-dim); }
+  .bulk-toolbar input, .bulk-toolbar select {
+    background: var(--surface-elev); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .bulk-toolbar .btn-mini {
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 6px;
+    padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+    height: 33px; align-self: flex-end;
+  }
+  .bulk-table-wrap {
+    overflow-x: auto; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    margin-bottom: 10px;
+  }
+  .bulk-table {
+    border-collapse: collapse; width: max-content; min-width: 100%;
+    font-size: 13px;
+  }
+  .bulk-table th, .bulk-table td {
+    border: 1px solid var(--border); padding: 0;
+    min-width: 110px; vertical-align: middle;
+  }
+  .bulk-table th {
+    background: var(--surface-elev); padding: 8px 10px;
+    font-weight: 600; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-dim);
+    position: sticky; top: 0; z-index: 1;
+    white-space: nowrap;
+  }
+  .bulk-table th.req::after { content: '*'; color: var(--danger); margin-left: 2px; }
+  .bulk-table td { position: relative; }
+  .bulk-table td.row-num {
+    background: var(--surface-elev); text-align: center;
+    color: var(--text-faint); min-width: 36px; font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .bulk-table td.row-num button {
+    background: none; border: none; color: var(--danger);
+    font-size: 14px; cursor: pointer; padding: 4px 8px;
+  }
+  .bulk-table input, .bulk-table select {
+    width: 100%; border: none; background: transparent;
+    color: var(--text); padding: 8px 10px; font-size: 13px; font-family: inherit;
+    outline: none; min-height: 36px;
+  }
+  .bulk-table tr:hover input,
+  .bulk-table tr:hover select {
+    background: var(--surface-elev);
+  }
+  .bulk-table input:focus, .bulk-table select:focus {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .bulk-table tr.row-error td { background: rgba(239,68,68,0.08); }
+  .bulk-table tr.row-saved td { background: rgba(16,185,129,0.08); }
+  .bulk-actions {
+    display: flex; gap: 8px; margin-bottom: 18px; padding-bottom: 8px;
+  }
+  .bulk-actions button {
+    flex: 1; padding: 12px; border-radius: var(--r-md);
+    font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .bulk-actions button.primary { background: var(--accent); color: #1a1d23; border-color: var(--accent); }
+  .bulk-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .bulk-summary {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 10px 14px; font-size: 13px; color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .bulk-summary strong { color: var(--text); }
+  .bulk-summary .ok { color: var(--success); font-weight: 600; }
+  .bulk-summary .err { color: var(--danger); font-weight: 600; }
 </style>
 </head>
 <body>
 
 <header class="topbar">
-  <h1>Students Dashboard</h1>
+  <h1><span class="icon" id="tab-icon">🏫</span> <span id="tab-title">Students</span></h1>
   <div class="meta" id="meta">Loading…</div>
 </header>
 
-<div class="controls">
-  <input class="search" id="search" placeholder="🔍 Search by name or class…" />
-</div>
-<div class="pills-row" id="pills-row"></div>
+<!-- Hidden datalist providing class suggestions across the app -->
+<datalist id="class-suggestions"></datalist>
 
-<div class="list" id="list">
-  <div class="skeleton"></div>
-  <div class="skeleton"></div>
-  <div class="skeleton"></div>
-</div>
+<!-- ============ TAB: STUDENTS ============ -->
+<section class="tab-content active" data-tab="students">
+  <div class="controls">
+    <input class="search" id="search-students" placeholder="🔍 Search by name or class…" />
+  </div>
+  <div class="pills-row" id="pills-students-row"></div>
+  <div class="list" id="list-students">
+    <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+  </div>
+</section>
 
-<button class="fab" id="fab" title="Add Student">＋</button>
+<!-- ============ TAB: BULK ADD ============ -->
+<section class="tab-content" data-tab="bulk">
+  <div class="tab-header">⚡ <strong>Bulk Add</strong> — တန်းတူ class တစ်တန်းအတွက် ကျောင်းသား အများကြီးကို တစ်ပြိုင်တည်း ဖြည့်ပြီး Save လုပ်ပါ။ Tab/Enter ဖြင့် field ပြောင်းနိုင်သည်။</div>
+  <div class="bulk-toolbar">
+    <div class="field">
+      <label>Default Class <span style="color:var(--danger)">*</span></label>
+      <input id="bulk-default-class" list="class-suggestions" placeholder="e.g. P4 Online" />
+    </div>
+    <div class="field">
+      <label>Number of rows</label>
+      <input id="bulk-row-count" type="number" min="1" max="50" value="10" />
+    </div>
+    <button type="button" class="btn-mini" id="bulk-rebuild">↻ Rebuild Table</button>
+    <button type="button" class="btn-mini" id="bulk-add-row">＋ Add Row</button>
+  </div>
 
-<div class="modal-backdrop" id="modal">
+  <div class="bulk-table-wrap">
+    <table class="bulk-table" id="bulk-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th class="req">Name (MM)</th>
+          <th class="req">Name (EN)</th>
+          <th>Class</th>
+          <th>House</th>
+          <th>Gender</th>
+          <th>DOB</th>
+          <th>Parent Name</th>
+          <th>Parent TG ID</th>
+          <th>Parent Phone</th>
+          <th>Phone 2</th>
+          <th>Parent Email</th>
+        </tr>
+      </thead>
+      <tbody id="bulk-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="bulk-summary" id="bulk-summary">Total rows: <strong id="bulk-total">0</strong> · Filled: <strong id="bulk-filled">0</strong></div>
+
+  <div class="bulk-actions">
+    <button type="button" id="bulk-clear">🗑 Clear All</button>
+    <button type="button" class="primary" id="bulk-save">💾 Save All</button>
+  </div>
+</section>
+
+<!-- ============ TAB: ATTENDANCE ============ -->
+<section class="tab-content" data-tab="attendance">
+  <div class="controls">
+    <input class="search" id="search-attendance" placeholder="🔍 Search by name or date…" />
+  </div>
+  <div class="pills-row" id="pills-attendance-row"></div>
+  <div class="list" id="list-attendance"><div class="skeleton"></div></div>
+</section>
+
+<!-- ============ TAB: DAILY REPORTS ============ -->
+<section class="tab-content" data-tab="daily_reports">
+  <div class="controls"><input class="search" id="search-daily" placeholder="🔍 Search reports…" /></div>
+  <div class="list" id="list-daily"><div class="skeleton"></div></div>
+</section>
+
+<!-- ============ TAB: HOMEWORK ============ -->
+<section class="tab-content" data-tab="homework">
+  <div class="controls"><input class="search" id="search-homework" placeholder="🔍 Search subject or class…" /></div>
+  <div class="list" id="list-homework"><div class="skeleton"></div></div>
+</section>
+
+<!-- ============ TAB: PARENT COMMS ============ -->
+<section class="tab-content" data-tab="parent_comms">
+  <div class="controls"><input class="search" id="search-comms" placeholder="🔍 Search type or student…" /></div>
+  <div class="list" id="list-comms"><div class="skeleton"></div></div>
+</section>
+
+<!-- ============ TAB: INCIDENTS ============ -->
+<section class="tab-content" data-tab="incidents">
+  <div class="controls"><input class="search" id="search-incidents" placeholder="🔍 Search incident…" /></div>
+  <div class="list" id="list-incidents"><div class="skeleton"></div></div>
+</section>
+
+<!-- ============ TAB: MONTHLY ============ -->
+<section class="tab-content" data-tab="monthly_summary">
+  <div class="list" id="list-monthly"><div class="skeleton"></div></div>
+</section>
+
+<!-- ============ TAB: TIMETABLE ============ -->
+<section class="tab-content" data-tab="timetable">
+  <div class="pills-row" id="pills-timetable-row"></div>
+  <div class="list" id="list-timetable"><div class="skeleton"></div></div>
+</section>
+
+<button class="fab" id="fab" title="Add">＋</button>
+
+<nav class="bottomnav" id="bottomnav">
+  <button class="nav-item active" data-target="students"><span class="nav-emoji">👥</span><span>Students</span></button>
+  <button class="nav-item" data-target="bulk"><span class="nav-emoji">⚡</span><span>Bulk Add</span></button>
+  <button class="nav-item" data-target="attendance"><span class="nav-emoji">✅</span><span>Attend</span></button>
+  <button class="nav-item" data-target="daily_reports"><span class="nav-emoji">📋</span><span>Daily</span></button>
+  <button class="nav-item" data-target="homework"><span class="nav-emoji">📝</span><span>Homework</span></button>
+  <button class="nav-item" data-target="parent_comms"><span class="nav-emoji">📬</span><span>Parents</span></button>
+  <button class="nav-item" data-target="incidents"><span class="nav-emoji">⚡</span><span>Incidents</span></button>
+  <button class="nav-item" data-target="monthly_summary"><span class="nav-emoji">📊</span><span>Monthly</span></button>
+  <button class="nav-item" data-target="timetable"><span class="nav-emoji">📅</span><span>Schedule</span></button>
+</nav>
+
+<!-- ===== STUDENT MODAL ===== -->
+<div class="modal-backdrop" id="modal-student">
   <div class="modal">
     <div class="modal-title">
-      <span id="modal-title">Add Student</span>
-      <button class="modal-close" id="modal-close">×</button>
+      <span id="ms-title">Add Student</span>
+      <button class="modal-close" data-close="modal-student">×</button>
     </div>
     <form id="student-form">
       <input type="hidden" id="f_student_id" />
@@ -164,13 +414,16 @@
         <div class="form-group"><label>Name (English) <span class="req">*</span></label><input type="text" id="f_name_en" required /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Class <span class="req">*</span></label><select id="f_class" required></select></div>
+        <div class="form-group">
+          <label>Class <span class="req">*</span></label>
+          <input type="text" id="f_class" list="class-suggestions" required placeholder="ရွေး သို့မဟုတ် ရိုက်ထည့်" />
+        </div>
         <div class="form-group"><label>House Color</label>
-          <select id="f_house"><option value="">—</option><option value="Red">🔴 Red</option><option value="Blue">🔵 Blue</option><option value="Green">🟢 Green</option><option value="Yellow">🟡 Yellow</option></select>
+          <select id="f_house"><option value="">—</option><option value="🔴 Red">🔴 Red</option><option value="🔵 Blue">🔵 Blue</option><option value="🟢 Green">🟢 Green</option><option value="🟡 Yellow">🟡 Yellow</option></select>
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Gender</label><select id="f_gender"><option value="">—</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+        <div class="form-group"><label>Gender</label><select id="f_gender"><option value="">—</option><option value="M">Male</option><option value="F">Female</option></select></div>
         <div class="form-group"><label>Date of Birth</label><input type="date" id="f_dob" /></div>
       </div>
       <div class="form-group"><label>Parent Name</label><input type="text" id="f_parent_name" /></div>
@@ -183,11 +436,25 @@
         <div class="form-group"><label>Parent Email</label><input type="email" id="f_parent_email" /></div>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-danger" id="btn-delete" style="display:none;">Delete</button>
-        <button type="button" class="btn btn-secondary" id="btn-cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="btn-save">Save</button>
+        <button type="button" class="btn btn-danger" id="btn-student-delete" style="display:none;">Delete</button>
+        <button type="button" class="btn btn-secondary" data-close="modal-student">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btn-student-save">Save</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ===== DETAIL VIEW MODAL ===== -->
+<div class="modal-backdrop" id="modal-detail">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="md-title">Detail</span>
+      <button class="modal-close" data-close="modal-detail">×</button>
+    </div>
+    <div id="md-body"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-close="modal-detail">Close</button>
+    </div>
   </div>
 </div>
 
@@ -203,16 +470,62 @@ const tgUser = tg?.initDataUnsafe?.user;
 const TG_ID = tgUser?.id ? String(tgUser.id) : (new URLSearchParams(location.search).get('tg_id') || '');
 if (tg?.colorScheme === 'light') document.body.classList.add('tg-light');
 
-let allStudents = [];
+// ========= STATE =========
+let currentTab = 'students';
+let userRole = '';
 let teacherClasses = [];
-let activeClassFilter = 'ALL';
-let currentEditId = null;
+let allData = {
+  students: [], attendance: [], daily_reports: [], homework: [],
+  parent_comms: [], incidents: [], monthly_summary: [], timetable: [],
+  class_list: []
+};
+let activeFilters = { students: 'ALL', attendance: 'ALL', timetable: 'ALL' };
 
-async function api(method, body) {
-  const url = new URL(API_BASE + '/scms/students');
-  if (method === 'GET' || method === 'DELETE') url.searchParams.set('tg_id', TG_ID);
-  if (method === 'DELETE' && body?.Student_ID) url.searchParams.set('student_id', body.Student_ID);
+// ========= HELPERS =========
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+const initials = s => {
+  const t = String(s || '?').trim().split(/\s+/);
+  return ((t[0]?.[0] || '?') + (t[1]?.[0] || '')).toUpperCase();
+};
+const fmtDate = d => { const s = String(d || ''); return s.length > 10 ? s.slice(0, 16).replace('T', ' ') : s; };
+const houseClass = h => {
+  const m = String(h || '').match(/Red|Blue|Green|Yellow/i);
+  return m ? 'house-' + m[0].charAt(0).toUpperCase() + m[0].slice(1).toLowerCase() : '';
+};
+function activeClassNames() {
+  // Prefer derived class_list from API, then teacher's assigned classes, then defaults.
+  const list = (allData.class_list || []).map(c => c.Class_Name || c).filter(Boolean);
+  if (list.length) return list;
+  if (teacherClasses.length) return teacherClasses.slice();
+  // Last resort — also derive from in-memory students if any
+  const fromStudents = Array.from(new Set((allData.students || []).map(s => s.Class).filter(Boolean)));
+  if (fromStudents.length) return fromStudents;
+  return ['KG','P1','P2','P3','P4','P5'];
+}
+function refreshClassDatalist() {
+  const dl = document.getElementById('class-suggestions');
+  dl.innerHTML = activeClassNames().map(c => `<option value="${escapeHtml(c)}">`).join('');
+}
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  setTimeout(() => { el.className = 'toast ' + type; }, 4000);
+}
+function confirmDialog(msg) {
+  return new Promise(resolve => {
+    if (tg?.showConfirm) tg.showConfirm(msg, ok => resolve(ok));
+    else resolve(window.confirm(msg));
+  });
+}
 
+// ========= API =========
+async function api(path, method, body) {
+  const url = new URL(API_BASE + path);
+  if (method === 'GET' || method === 'DELETE') {
+    url.searchParams.set('tg_id', TG_ID);
+    if (method === 'DELETE' && body?.Student_ID) url.searchParams.set('student_id', body.Student_ID);
+  }
   const opts = {
     method,
     headers: { 'Content-Type': 'application/json', 'X-TG-ID': TG_ID }
@@ -220,112 +533,400 @@ async function api(method, body) {
   if (method === 'POST' || method === 'PUT') {
     opts.body = JSON.stringify({ ...body, tg_id: TG_ID });
   }
-
   let res, txt = '', json = null;
   try {
     res = await fetch(url, opts);
     txt = await res.text();
-    if (txt) {
-      try { json = JSON.parse(txt); } catch (e) { /* leave json null */ }
-    }
-  } catch (netErr) {
-    throw new Error('Network: ' + netErr.message);
-  }
-
-  console.log('[API]', method, url.toString(), '→', res.status, '| body:', txt.slice(0, 300));
-
+    if (txt) { try { json = JSON.parse(txt); } catch (e) {} }
+  } catch (netErr) { throw new Error('Network: ' + netErr.message); }
+  console.log('[API]', method, url.pathname, '→', res.status);
   if (!res.ok) {
     const msg = (json && (json.error || json._message)) || `HTTP ${res.status}: ${txt.slice(0, 100) || 'no body'}`;
     throw new Error(msg);
   }
-  if (!json) {
-    throw new Error('Empty response from n8n. Check workflow Active + path matches /webhook/scms/students');
-  }
-  if (json.ok === false) {
-    throw new Error(json.error || 'Server returned ok=false');
-  }
+  if (!json) throw new Error('Empty response. Check workflow Active + path matches ' + path);
+  if (json.ok === false) throw new Error(json.error || 'Server returned ok=false');
   return json;
 }
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
-}
-function initials(s) {
-  const t = String(s || '?').trim();
-  const parts = t.split(/\s+/);
-  return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase();
+// ========= LOAD =========
+async function loadAll() {
+  try {
+    if (!TG_ID) {
+      document.getElementById('meta').textContent = '⚠ No Telegram user — open via the bot';
+      return;
+    }
+    let data;
+    try { data = await api('/scms/data', 'GET'); }
+    catch (e) {
+      console.warn('[/scms/data] failed, falling back:', e.message);
+      const s = await api('/scms/students', 'GET');
+      data = {
+        ok: true, role: s.role, classes_assigned: s.teacher_classes,
+        class_list: (s.students || []).map(x => x.Class).filter(Boolean)
+                     .filter((v, i, a) => a.indexOf(v) === i)
+                     .map(c => ({ Class_Name: c })),
+        students: s.students || [],
+        attendance: [], daily_reports: [], homework: [],
+        parent_comms: [], incidents: [], monthly_summary: [], timetable: []
+      };
+      toast('ⓘ /scms/data endpoint မရှိ — basic mode', '');
+    }
+
+    userRole       = data.role || '';
+    teacherClasses = data.classes_assigned || [];
+    allData = {
+      students:        data.students        || [],
+      attendance:      data.attendance      || [],
+      daily_reports:   data.daily_reports   || [],
+      homework:        data.homework        || [],
+      parent_comms:    data.parent_comms    || [],
+      incidents:       data.incidents       || [],
+      monthly_summary: data.monthly_summary || [],
+      timetable:       data.timetable       || [],
+      class_list:      data.class_list      || []
+    };
+
+    document.getElementById('meta').innerHTML =
+      `Logged in as <strong>${escapeHtml(tgUser?.first_name || TG_ID)}</strong> · ${escapeHtml(userRole)} · ${allData.students.length} students · ${activeClassNames().length} classes`;
+
+    refreshClassDatalist();
+    renderStudents(); renderAttendance(); renderDaily(); renderHomework();
+    renderComms(); renderIncidents(); renderMonthly(); renderTimetable();
+    renderClassPills('students'); renderClassPills('attendance'); renderClassPills('timetable');
+    updateFab();
+  } catch (err) {
+    document.getElementById('meta').textContent = '✗ ' + err.message;
+    document.querySelectorAll('.tab-content').forEach(el => {
+      el.querySelector('.list, .stats-grid, .bulk-table-wrap')?.remove();
+      const errBox = `
+        <div class="state">
+          <div class="state-emoji">⚠</div>
+          <div class="state-msg">${escapeHtml(err.message)}</div>
+          <div class="state-detail">
+            API: ${escapeHtml(API_BASE)}<br>
+            TG_ID: ${escapeHtml(TG_ID || '(none)')}<br>
+            Open browser DevTools (Console) for full request log.
+          </div>
+        </div>`;
+      el.insertAdjacentHTML('beforeend', errBox);
+    });
+  }
 }
 
-function renderPills() {
-  const row = document.getElementById('pills-row');
-  const classes = ['ALL', ...teacherClasses];
-  row.innerHTML = classes.map(c =>
-    `<span class="filter-pill ${c === activeClassFilter ? 'active' : ''}" data-cls="${escapeHtml(c)}">${escapeHtml(c)}</span>`
+// ========= RENDERERS =========
+function renderClassPills(scope) {
+  const row = document.getElementById('pills-' + scope + '-row');
+  if (!row) return;
+  const opts = ['ALL', ...activeClassNames()];
+  row.innerHTML = opts.map(c =>
+    `<span class="filter-pill ${c === activeFilters[scope] ? 'active' : ''}" data-cls="${escapeHtml(c)}">${escapeHtml(c)}</span>`
   ).join('');
   row.querySelectorAll('.filter-pill').forEach(el =>
-    el.onclick = () => { activeClassFilter = el.dataset.cls; renderPills(); renderList(); }
+    el.onclick = () => {
+      activeFilters[scope] = el.dataset.cls;
+      renderClassPills(scope);
+      if (scope === 'students')   renderStudents();
+      if (scope === 'attendance') renderAttendance();
+      if (scope === 'timetable')  renderTimetable();
+    }
   );
 }
 
-function renderList() {
-  const list = document.getElementById('list');
-  const q = document.getElementById('search').value.trim().toLowerCase();
-  let filtered = allStudents.filter(s => {
-    if (String(s.Status || '').toLowerCase() === 'inactive') return false;
-    if (activeClassFilter !== 'ALL' && String(s.Class || '') !== activeClassFilter) return false;
-    if (q && !(`${s.Name_MM} ${s.Name_EN} ${s.Class}`.toLowerCase().includes(q))) return false;
-    return true;
-  });
-  if (filtered.length === 0) {
-    list.innerHTML = `<div class="state"><div class="state-emoji">📭</div><div class="state-msg">No students found</div></div>`;
-    return;
-  }
-  list.innerHTML = filtered.map(s => `
-    <div class="student-card" data-id="${escapeHtml(s.Student_ID)}">
-      <div class="avatar house-${escapeHtml(s.House_Color || '')}">${escapeHtml(initials(s.Name_EN || s.Name_MM))}</div>
-      <div class="student-info">
-        <div class="student-name">${escapeHtml(s.Name_MM || s.Name_EN || 'Unnamed')}</div>
-        <div class="student-sub">
-          <span>${escapeHtml(s.Name_EN || '')}</span>
-          ${s.Gender ? `<span class="dot">·</span><span>${escapeHtml(s.Gender)}</span>` : ''}
-          ${s.Date_of_Birth ? `<span class="dot">·</span><span>${escapeHtml(s.Date_of_Birth)}</span>` : ''}
+function renderStudents() {
+  const list = document.getElementById('list-students');
+  const q = (document.getElementById('search-students').value || '').trim().toLowerCase();
+  let arr = (allData.students || []).filter(s => String(s.Status || 'Active').toLowerCase() !== 'inactive');
+  if (activeFilters.students !== 'ALL') arr = arr.filter(s => String(s.Class || '') === activeFilters.students);
+  if (q) arr = arr.filter(s => `${s.Name_MM} ${s.Name_EN} ${s.Class}`.toLowerCase().includes(q));
+  if (!arr.length) { list.innerHTML = stateBlock('📭', 'No students found'); return; }
+  list.innerHTML = arr.map(s => `
+    <div class="row-card" data-id="${escapeHtml(s.Student_ID)}" data-action="edit-student">
+      <div class="row-flex">
+        <div class="avatar ${houseClass(s.House_Color)}">${escapeHtml(initials(s.Name_EN || s.Name_MM))}</div>
+        <div class="row-info">
+          <div class="row-title">${escapeHtml(s.Name_MM || s.Name_EN || 'Unnamed')}</div>
+          <div class="row-sub">
+            <span>${escapeHtml(s.Name_EN || '')}</span>
+            ${s.Gender ? `<span class="dot">·</span><span>${escapeHtml(s.Gender)}</span>` : ''}
+            ${s.Date_of_Birth ? `<span class="dot">·</span><span>${escapeHtml(fmtDate(s.Date_of_Birth))}</span>` : ''}
+          </div>
         </div>
+        <span class="badge">${escapeHtml(s.Class || '?')}</span>
       </div>
-      <span class="badge">${escapeHtml(s.Class || '?')}</span>
     </div>`).join('');
-  list.querySelectorAll('.student-card').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+  bindCardClicks(list);
 }
 
-const modal = document.getElementById('modal');
-function openModal() { modal.classList.add('show'); }
-function closeModal() { modal.classList.remove('show'); currentEditId = null; }
-document.getElementById('modal-close').onclick = closeModal;
-document.getElementById('btn-cancel').onclick = closeModal;
-modal.onclick = e => { if (e.target === modal) closeModal(); };
-
-function populateClassDropdown() {
-  const sel = document.getElementById('f_class');
-  const classes = teacherClasses.length ? teacherClasses : ['KG','P1','P2','P3','P4','P5'];
-  sel.innerHTML = '<option value="">— select —</option>' + classes.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+function renderAttendance() {
+  const list = document.getElementById('list-attendance');
+  const q = (document.getElementById('search-attendance').value || '').trim().toLowerCase();
+  let arr = (allData.attendance || []).slice().sort((a,b) => String(b.Date||'').localeCompare(String(a.Date||'')));
+  if (activeFilters.attendance !== 'ALL') arr = arr.filter(r => String(r.Class || '') === activeFilters.attendance);
+  if (q) arr = arr.filter(r => `${r.Name_EN} ${r.Date} ${r.Status} ${r.Class}`.toLowerCase().includes(q));
+  if (!arr.length) { list.innerHTML = stateBlock('✅', 'No attendance records'); return; }
+  list.innerHTML = arr.slice(0, 200).map(r => {
+    const st = String(r.Status || '').toUpperCase();
+    const stLabel = st === 'P' ? 'Present' : st === 'A' ? 'Absent' : st === 'L' ? 'Leave' : st;
+    const stClass = st === 'P' ? 'success' : st === 'A' ? 'danger' : 'info';
+    return `
+      <div class="row-card" data-payload='${escapeHtml(JSON.stringify(r))}' data-action="show-detail" data-title="Attendance">
+        <div class="row-flex">
+          <div class="avatar" style="background: var(--surface-elev); color: var(--text);">${escapeHtml(initials(r.Name_EN))}</div>
+          <div class="row-info">
+            <div class="row-title">${escapeHtml(r.Name_EN || r.Student_ID || 'Student')}</div>
+            <div class="row-sub">
+              <span>${escapeHtml(r.Date || '')}</span>
+              ${r.Day_of_Week ? `<span class="dot">·</span><span>${escapeHtml(r.Day_of_Week)}</span>` : ''}
+              ${r.Class ? `<span class="dot">·</span><span>${escapeHtml(r.Class)}</span>` : ''}
+              ${r.Note ? `<span class="dot">·</span><span>${escapeHtml(r.Note)}</span>` : ''}
+            </div>
+          </div>
+          <span class="badge ${stClass}">${escapeHtml(stLabel)}</span>
+        </div>
+      </div>`;
+  }).join('') + (arr.length > 200 ? `<div class="state" style="padding:20px"><div class="state-msg">Showing 200 of ${arr.length}</div></div>` : '');
+  bindCardClicks(list);
 }
 
-function openAdd() {
-  currentEditId = null;
-  document.getElementById('modal-title').textContent = 'Add Student';
-  document.getElementById('btn-delete').style.display = 'none';
+function renderDaily() {
+  const list = document.getElementById('list-daily');
+  const q = (document.getElementById('search-daily').value || '').trim().toLowerCase();
+  let arr = (allData.daily_reports || []).slice().sort((a,b) => String(b.Date||'').localeCompare(String(a.Date||'')));
+  if (q) arr = arr.filter(r => `${r.Name_EN} ${r.Date} ${r.Mood} ${r.Class}`.toLowerCase().includes(q));
+  if (!arr.length) { list.innerHTML = stateBlock('📋', 'No daily reports'); return; }
+  list.innerHTML = arr.slice(0, 200).map(r => `
+    <div class="row-card" data-payload='${escapeHtml(JSON.stringify(r))}' data-action="show-detail" data-title="Daily Report">
+      <div class="row-flex">
+        <div class="avatar" style="background: var(--info)">${escapeHtml(initials(r.Name_EN))}</div>
+        <div class="row-info">
+          <div class="row-title">${escapeHtml(r.Name_EN || r.Student_ID)}</div>
+          <div class="row-sub">
+            <span>${escapeHtml(r.Date || '')}</span>
+            ${r.Mood ? `<span class="dot">·</span><span>😊 ${escapeHtml(r.Mood)}</span>` : ''}
+            ${r.Meal ? `<span class="dot">·</span><span>🍱 ${escapeHtml(r.Meal)}</span>` : ''}
+            ${r.Nap_Min ? `<span class="dot">·</span><span>💤 ${escapeHtml(r.Nap_Min)}min</span>` : ''}
+          </div>
+        </div>
+        <span class="badge ${String(r.AI_Sent).toLowerCase()==='true' ? 'success' : 'muted'}">${String(r.AI_Sent).toLowerCase()==='true' ? 'Sent' : 'Pending'}</span>
+      </div>
+    </div>`).join('');
+  bindCardClicks(list);
+}
+
+function renderHomework() {
+  const list = document.getElementById('list-homework');
+  const q = (document.getElementById('search-homework').value || '').trim().toLowerCase();
+  let arr = (allData.homework || []).slice().sort((a,b) => String(b.Date||'').localeCompare(String(a.Date||'')));
+  if (q) arr = arr.filter(r => `${r.Subject} ${r.Class} ${r.Description} ${r.Type}`.toLowerCase().includes(q));
+  if (!arr.length) { list.innerHTML = stateBlock('📝', 'No homework / lesson logs'); return; }
+  list.innerHTML = arr.slice(0, 200).map(r => `
+    <div class="row-card" data-payload='${escapeHtml(JSON.stringify(r))}' data-action="show-detail" data-title="Homework / Lesson">
+      <div class="row-flex">
+        <div class="avatar" style="background: var(--house-green)">📚</div>
+        <div class="row-info">
+          <div class="row-title">${escapeHtml(r.Subject || 'Subject')} <span style="font-weight:400; color:var(--text-dim); font-size:13px;">— ${escapeHtml(r.Type || '')}</span></div>
+          <div class="row-sub">
+            <span>${escapeHtml(r.Date || '')}</span>
+            ${r.Class ? `<span class="dot">·</span><span>${escapeHtml(r.Class)}</span>` : ''}
+            ${r.LB_Page ? `<span class="dot">·</span><span>LB p.${escapeHtml(r.LB_Page)}</span>` : ''}
+            ${r.WB_Page ? `<span class="dot">·</span><span>WB p.${escapeHtml(r.WB_Page)}</span>` : ''}
+          </div>
+        </div>
+        ${r.Due_Date ? `<span class="badge">Due ${escapeHtml(r.Due_Date)}</span>` : ''}
+      </div>
+    </div>`).join('');
+  bindCardClicks(list);
+}
+
+function renderComms() {
+  const list = document.getElementById('list-comms');
+  const q = (document.getElementById('search-comms').value || '').trim().toLowerCase();
+  let arr = (allData.parent_comms || []).slice().sort((a,b) => String(b.Timestamp||'').localeCompare(String(a.Timestamp||'')));
+  if (q) arr = arr.filter(r => `${r.Type} ${r.Name_EN} ${r.Message_Preview} ${r.Status}`.toLowerCase().includes(q));
+  if (!arr.length) { list.innerHTML = stateBlock('📬', 'No parent communications'); return; }
+  list.innerHTML = arr.slice(0, 200).map(r => `
+    <div class="row-card" data-payload='${escapeHtml(JSON.stringify(r))}' data-action="show-detail" data-title="Parent Communication">
+      <div class="row-flex">
+        <div class="avatar" style="background: var(--accent); color:#1a1d23;">📬</div>
+        <div class="row-info">
+          <div class="row-title">${escapeHtml(r.Type || 'Message')} <span style="font-weight:400; color:var(--text-dim); font-size:13px;">→ ${escapeHtml(r.Name_EN || '')}</span></div>
+          <div class="row-sub">
+            <span>${escapeHtml(fmtDate(r.Timestamp || r.Date))}</span>
+            ${r.Message_Preview ? `<span class="dot">·</span><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; display:inline-block; vertical-align:bottom;">${escapeHtml(String(r.Message_Preview).slice(0, 60))}…</span>` : ''}
+          </div>
+        </div>
+        <span class="badge ${String(r.Status).toLowerCase()==='sent' ? 'success' : 'danger'}">${escapeHtml(r.Status || '')}</span>
+      </div>
+    </div>`).join('');
+  bindCardClicks(list);
+}
+
+function renderIncidents() {
+  const list = document.getElementById('list-incidents');
+  const q = (document.getElementById('search-incidents').value || '').trim().toLowerCase();
+  let arr = (allData.incidents || []).slice().sort((a,b) => String(b.Timestamp||'').localeCompare(String(a.Timestamp||'')));
+  if (q) arr = arr.filter(r => `${r.Type} ${r.Severity} ${r.Description} ${r.Name_EN}`.toLowerCase().includes(q));
+  if (!arr.length) { list.innerHTML = stateBlock('⚡', 'No incidents recorded'); return; }
+  list.innerHTML = arr.slice(0, 200).map(r => {
+    const sev = String(r.Severity || '').toLowerCase();
+    const sevClass = sev === 'high' ? 'danger' : sev === 'low' ? 'info' : 'muted';
+    return `
+    <div class="row-card" data-payload='${escapeHtml(JSON.stringify(r))}' data-action="show-detail" data-title="Incident">
+      <div class="row-flex">
+        <div class="avatar" style="background: var(--house-red)">⚡</div>
+        <div class="row-info">
+          <div class="row-title">${escapeHtml(r.Type || 'Incident')} <span style="font-weight:400; color:var(--text-dim); font-size:13px;">— ${escapeHtml(r.Name_EN || '')}</span></div>
+          <div class="row-sub">
+            <span>${escapeHtml(fmtDate(r.Timestamp || r.Date))}</span>
+            ${r.Class ? `<span class="dot">·</span><span>${escapeHtml(r.Class)}</span>` : ''}
+            ${r.Description ? `<span class="dot">·</span><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; display:inline-block; vertical-align:bottom;">${escapeHtml(String(r.Description).slice(0,60))}</span>` : ''}
+          </div>
+        </div>
+        <span class="badge ${sevClass}">${escapeHtml(r.Severity || 'Info')}</span>
+      </div>
+    </div>`;
+  }).join('');
+  bindCardClicks(list);
+}
+
+function renderMonthly() {
+  const list = document.getElementById('list-monthly');
+  const arr = (allData.monthly_summary || []).filter(r => r && r.Student_ID);
+  if (!arr.length) { list.innerHTML = stateBlock('📊', 'No monthly summary data'); return; }
+  list.innerHTML = arr.map(r => {
+    const pct = parseFloat(r['Attendance_%']) || 0;
+    const pctDisplay = pct < 1 ? (pct * 100).toFixed(0) + '%' : pct.toFixed(0) + '%';
+    return `
+    <div class="row-card" data-payload='${escapeHtml(JSON.stringify(r))}' data-action="show-detail" data-title="Monthly Summary">
+      <div class="row-flex">
+        <div class="avatar" style="background: var(--info)">${escapeHtml(initials(r.Name_EN))}</div>
+        <div class="row-info">
+          <div class="row-title">${escapeHtml(r.Name_EN || r.Student_ID)}</div>
+          <div class="row-sub">
+            <span>📅 ${escapeHtml(r.Class || '')}</span>
+            <span class="dot">·</span><span>✅ ${escapeHtml(r.Present_Days || '0')}/${escapeHtml(r.Total_School_Days || '0')}</span>
+            <span class="dot">·</span><span>📋 ${escapeHtml(r.Reports_Sent || '0')}</span>
+            <span class="dot">·</span><span>⚡ ${escapeHtml(r.Incidents || '0')}</span>
+          </div>
+        </div>
+        <span class="badge ${pct >= 0.9 ? 'success' : pct >= 0.7 ? 'info' : 'danger'}">${pctDisplay}</span>
+      </div>
+    </div>`;
+  }).join('');
+  bindCardClicks(list);
+}
+
+function renderTimetable() {
+  const list = document.getElementById('list-timetable');
+  let arr = (allData.timetable || []).filter(t => t && t.Class && t.Day);
+  if (activeFilters.timetable !== 'ALL') arr = arr.filter(t => String(t.Class || '') === activeFilters.timetable);
+  if (!arr.length) { list.innerHTML = stateBlock('📅', 'No timetable for this class'); return; }
+  const dayOrder = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const grouped = {};
+  arr.forEach(t => { (grouped[t.Day] = grouped[t.Day] || []).push(t); });
+  const days = Object.keys(grouped).sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
+  list.innerHTML = days.map(d => {
+    const periods = grouped[d].slice().sort((a,b) => (parseInt(a.Period)||0) - (parseInt(b.Period)||0));
+    return `
+      <div class="timetable-day">
+        <div class="day-header">${escapeHtml(d)} · ${periods.length} periods</div>
+        ${periods.map(p => `
+          <div class="period-row">
+            <div class="period-time">${escapeHtml(p.Start_Time||'')}–${escapeHtml(p.End_Time||'')}</div>
+            <div>
+              <div style="font-weight:600;">${escapeHtml(p.Subject || 'Subject')}</div>
+              <div class="row-sub">
+                <span>P${escapeHtml(p.Period||'')}</span>
+                ${p.Class ? `<span class="dot">·</span><span>${escapeHtml(p.Class)}</span>` : ''}
+                ${p.Room ? `<span class="dot">·</span><span>📍 ${escapeHtml(p.Room)}</span>` : ''}
+              </div>
+            </div>
+            ${p.Teacher_ID ? `<span class="badge muted">${escapeHtml(p.Teacher_ID)}</span>` : '<span></span>'}
+          </div>
+        `).join('')}
+      </div>`;
+  }).join('');
+}
+
+const stateBlock = (emoji, msg) => `<div class="state"><div class="state-emoji">${emoji}</div><div class="state-msg">${escapeHtml(msg)}</div></div>`;
+
+function bindCardClicks(container) {
+  container.querySelectorAll('.row-card').forEach(el => {
+    el.onclick = () => {
+      const action = el.dataset.action;
+      if (action === 'edit-student') openEditStudent(el.dataset.id);
+      else if (action === 'show-detail') {
+        try { showDetail(el.dataset.title || 'Detail', JSON.parse(el.dataset.payload)); }
+        catch (e) { console.error(e); }
+      }
+    };
+  });
+}
+
+// ========= TAB SWITCHING =========
+const TAB_META = {
+  students:        { icon: '👥', title: 'Students',         hasFab: true  },
+  bulk:            { icon: '⚡', title: 'Bulk Add',         hasFab: false },
+  attendance:      { icon: '✅', title: 'Attendance',       hasFab: false },
+  daily_reports:   { icon: '📋', title: 'Daily Reports',    hasFab: false },
+  homework:        { icon: '📝', title: 'Homework',         hasFab: false },
+  parent_comms:    { icon: '📬', title: 'Parent Comms',     hasFab: false },
+  incidents:       { icon: '⚡', title: 'Incidents',        hasFab: false },
+  monthly_summary: { icon: '📊', title: 'Monthly Summary',  hasFab: false },
+  timetable:       { icon: '📅', title: 'Timetable',        hasFab: false }
+};
+
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.onclick = () => {
+    const target = btn.dataset.target;
+    currentTab = target;
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.target === target));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.dataset.tab === target));
+    const meta = TAB_META[target];
+    document.getElementById('tab-icon').textContent = meta.icon;
+    document.getElementById('tab-title').textContent = meta.title;
+    updateFab();
+    if (target === 'bulk' && !document.getElementById('bulk-tbody').children.length) {
+      buildBulkTable();
+    }
+  };
+});
+
+function updateFab() {
+  document.getElementById('fab').classList.toggle('show', !!TAB_META[currentTab]?.hasFab);
+}
+document.getElementById('fab').onclick = () => {
+  if (currentTab === 'students') openAddStudent();
+};
+
+['students','attendance','daily','homework','comms','incidents'].forEach(scope => {
+  const map = { students:renderStudents, attendance:renderAttendance, daily:renderDaily,
+                homework:renderHomework, comms:renderComms, incidents:renderIncidents };
+  const el = document.getElementById('search-' + scope);
+  if (el) el.oninput = map[scope];
+});
+
+// ========= STUDENT MODAL =========
+const studentModal = document.getElementById('modal-student');
+let editingStudentId = null;
+
+function openAddStudent() {
+  editingStudentId = null;
+  document.getElementById('ms-title').textContent = 'Add Student';
+  document.getElementById('btn-student-delete').style.display = 'none';
   document.getElementById('student-form').reset();
   document.getElementById('f_student_id').value = '';
-  populateClassDropdown();
-  openModal();
+  studentModal.classList.add('show');
+  refreshClassDatalist();
 }
-
-function openEdit(student_id) {
-  const s = allStudents.find(x => x.Student_ID === student_id);
+function openEditStudent(student_id) {
+  const s = allData.students.find(x => x.Student_ID === student_id);
   if (!s) return;
-  currentEditId = student_id;
-  document.getElementById('modal-title').textContent = 'Edit Student';
-  document.getElementById('btn-delete').style.display = 'block';
-  populateClassDropdown();
+  editingStudentId = student_id;
+  document.getElementById('ms-title').textContent = 'Edit Student';
+  document.getElementById('btn-student-delete').style.display = 'block';
+  refreshClassDatalist();
   document.getElementById('f_student_id').value   = s.Student_ID;
   document.getElementById('f_name_mm').value      = s.Name_MM || '';
   document.getElementById('f_name_en').value      = s.Name_EN || '';
@@ -338,20 +939,18 @@ function openEdit(student_id) {
   document.getElementById('f_parent_phone').value = s.Parent_Phone || '';
   document.getElementById('f_parent_phone2').value= s.Parent_Phone2 || '';
   document.getElementById('f_parent_email').value = s.Parent_Email || '';
-  openModal();
+  studentModal.classList.add('show');
 }
-
-document.getElementById('fab').onclick = openAdd;
 
 document.getElementById('student-form').onsubmit = async (e) => {
   e.preventDefault();
-  const btn = document.getElementById('btn-save');
+  const btn = document.getElementById('btn-student-save');
   btn.disabled = true; btn.textContent = 'Saving…';
   const payload = {
     Student_ID:    document.getElementById('f_student_id').value || undefined,
     Name_MM:       document.getElementById('f_name_mm').value.trim(),
     Name_EN:       document.getElementById('f_name_en').value.trim(),
-    Class:         document.getElementById('f_class').value,
+    Class:         document.getElementById('f_class').value.trim(),
     House_Color:   document.getElementById('f_house').value,
     Gender:        document.getElementById('f_gender').value,
     Date_of_Birth: document.getElementById('f_dob').value,
@@ -362,89 +961,248 @@ document.getElementById('student-form').onsubmit = async (e) => {
     Parent_Email:  document.getElementById('f_parent_email').value.trim()
   };
   try {
-    if (currentEditId) {
-      await api('PUT', payload);
+    if (editingStudentId) {
+      await api('/scms/students', 'PUT', payload);
       toast('✓ Student updated', 'success');
     } else {
-      const postPayload = {
+      await api('/scms/students', 'POST', {
         name_mm: payload.Name_MM, name_en: payload.Name_EN,
         class: payload.Class, house_color: payload.House_Color,
         gender: payload.Gender, dob: payload.Date_of_Birth,
         parent_name: payload.Parent_Name, parent_tg_id: payload.Parent_TG_ID,
         parent_phone: payload.Parent_Phone, parent_phone2: payload.Parent_Phone2,
         parent_email: payload.Parent_Email
-      };
-      await api('POST', postPayload);
+      });
       toast('✓ Student added', 'success');
     }
-    closeModal();
-    await loadStudents();
-  } catch (err) {
-    toast('✗ ' + err.message, 'error');
-  } finally {
-    btn.disabled = false; btn.textContent = 'Save';
-  }
+    studentModal.classList.remove('show');
+    await loadAll();
+  } catch (err) { toast('✗ ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Save'; }
 };
 
-document.getElementById('btn-delete').onclick = async () => {
-  if (!currentEditId) return;
-  const sure = await confirmDialog('Delete this student?');
-  if (!sure) return;
+document.getElementById('btn-student-delete').onclick = async () => {
+  if (!editingStudentId) return;
+  if (!(await confirmDialog('Delete this student?'))) return;
   try {
-    await api('DELETE', { Student_ID: currentEditId });
+    await api('/scms/students', 'DELETE', { Student_ID: editingStudentId });
     toast('✓ Deleted', 'success');
-    closeModal();
-    await loadStudents();
-  } catch (err) {
-    toast('✗ ' + err.message, 'error');
-  }
+    studentModal.classList.remove('show');
+    await loadAll();
+  } catch (err) { toast('✗ ' + err.message, 'error'); }
 };
 
-function confirmDialog(msg) {
-  return new Promise(resolve => {
-    if (tg?.showConfirm) tg.showConfirm(msg, ok => resolve(ok));
-    else resolve(window.confirm(msg));
+// ========= DETAIL MODAL =========
+function showDetail(title, obj) {
+  document.getElementById('md-title').textContent = title;
+  const body = document.getElementById('md-body');
+  body.innerHTML = Object.keys(obj).filter(k => obj[k] !== null && obj[k] !== '' && obj[k] !== undefined)
+    .map(k => `<div class="detail-row"><span class="detail-label">${escapeHtml(k)}</span><span class="detail-value">${escapeHtml(String(obj[k]))}</span></div>`)
+    .join('');
+  document.getElementById('modal-detail').classList.add('show');
+}
+
+document.querySelectorAll('[data-close]').forEach(el => {
+  el.onclick = () => document.getElementById(el.dataset.close).classList.remove('show');
+});
+document.querySelectorAll('.modal-backdrop').forEach(m => {
+  m.onclick = e => { if (e.target === m) m.classList.remove('show'); };
+});
+
+// ============================================================
+// BULK ADD TAB — spreadsheet-style table
+// ============================================================
+const BULK_FIELDS = [
+  { key: 'name_mm',       type: 'text',  required: true,  placeholder: 'မောင်မောင်' },
+  { key: 'name_en',       type: 'text',  required: true,  placeholder: 'Maung Maung' },
+  { key: 'class',         type: 'text',  list: 'class-suggestions' },
+  { key: 'house_color',   type: 'select', options: ['', '🔴 Red', '🔵 Blue', '🟢 Green', '🟡 Yellow'] },
+  { key: 'gender',        type: 'select', options: ['', 'M', 'F'] },
+  { key: 'dob',           type: 'date'  },
+  { key: 'parent_name',   type: 'text'  },
+  { key: 'parent_tg_id',  type: 'text', inputmode: 'numeric' },
+  { key: 'parent_phone',  type: 'tel'   },
+  { key: 'parent_phone2', type: 'tel'   },
+  { key: 'parent_email',  type: 'email' }
+];
+
+function buildBulkRow(idx, defaultClass = '') {
+  const tr = document.createElement('tr');
+  tr.dataset.idx = idx;
+  tr.innerHTML = `<td class="row-num"><button type="button" data-action="del-row" title="Delete row">✕</button> <span>${idx+1}</span></td>`;
+  for (const f of BULK_FIELDS) {
+    const td = document.createElement('td');
+    let inputHtml;
+    if (f.type === 'select') {
+      inputHtml = `<select data-key="${f.key}">${f.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o || '—')}</option>`).join('')}</select>`;
+    } else {
+      const list = f.list ? ` list="${f.list}"` : '';
+      const inputmode = f.inputmode ? ` inputmode="${f.inputmode}"` : '';
+      const placeholder = f.placeholder ? ` placeholder="${escapeHtml(f.placeholder)}"` : '';
+      const value = (f.key === 'class' && defaultClass) ? ` value="${escapeHtml(defaultClass)}"` : '';
+      inputHtml = `<input type="${f.type}" data-key="${f.key}"${list}${inputmode}${placeholder}${value} />`;
+    }
+    td.innerHTML = inputHtml;
+    tr.appendChild(td);
+  }
+  return tr;
+}
+
+function buildBulkTable() {
+  const tbody = document.getElementById('bulk-tbody');
+  const count = Math.max(1, Math.min(50, parseInt(document.getElementById('bulk-row-count').value) || 10));
+  const defaultClass = document.getElementById('bulk-default-class').value.trim();
+  tbody.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    tbody.appendChild(buildBulkRow(i, defaultClass));
+  }
+  updateBulkSummary();
+  attachBulkHandlers();
+}
+
+function attachBulkHandlers() {
+  const tbody = document.getElementById('bulk-tbody');
+  tbody.querySelectorAll('input, select').forEach(inp => { inp.oninput = updateBulkSummary; inp.onchange = updateBulkSummary; });
+  tbody.querySelectorAll('[data-action="del-row"]').forEach(btn => {
+    btn.onclick = (e) => {
+      const tr = e.target.closest('tr');
+      tr.remove();
+      // Renumber
+      tbody.querySelectorAll('tr').forEach((r, i) => {
+        r.dataset.idx = i;
+        const numSpan = r.querySelector('.row-num span');
+        if (numSpan) numSpan.textContent = (i + 1);
+      });
+      updateBulkSummary();
+    };
+  });
+  // Tab/Enter navigation: pressing Enter in a cell moves to the same column in next row
+  tbody.querySelectorAll('input, select').forEach(inp => {
+    inp.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const td = inp.closest('td');
+        const tr = td.parentElement;
+        const colIdx = Array.from(tr.children).indexOf(td);
+        const nextTr = tr.nextElementSibling;
+        if (nextTr) {
+          const nextCell = nextTr.children[colIdx];
+          const nextInp = nextCell.querySelector('input, select');
+          if (nextInp) nextInp.focus();
+        }
+      }
+    };
   });
 }
 
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show ' + type;
-  setTimeout(() => { el.className = 'toast ' + type; }, 4000);
+function updateBulkSummary() {
+  const tbody = document.getElementById('bulk-tbody');
+  const rows = tbody.querySelectorAll('tr');
+  let filled = 0;
+  rows.forEach(r => {
+    const v = r.querySelector('[data-key="name_mm"]');
+    if (v && v.value.trim()) filled++;
+  });
+  document.getElementById('bulk-total').textContent = rows.length;
+  document.getElementById('bulk-filled').textContent = filled;
 }
 
-async function loadStudents() {
-  try {
-    if (!TG_ID) {
-      document.getElementById('meta').textContent = '⚠ No Telegram user — open via the bot';
-      document.getElementById('list').innerHTML = `<div class="state"><div class="state-emoji">🔒</div><div class="state-msg">Authentication required</div></div>`;
-      return;
+document.getElementById('bulk-rebuild').onclick = () => {
+  if (document.getElementById('bulk-tbody').children.length > 0) {
+    confirmDialog('Rebuild table? Unsaved data will be lost.').then(ok => {
+      if (ok) buildBulkTable();
+    });
+  } else {
+    buildBulkTable();
+  }
+};
+
+document.getElementById('bulk-default-class').oninput = () => {
+  // Apply default class to empty class fields
+  const def = document.getElementById('bulk-default-class').value.trim();
+  if (!def) return;
+  document.getElementById('bulk-tbody').querySelectorAll('tr').forEach(r => {
+    const ci = r.querySelector('[data-key="class"]');
+    if (ci && !ci.value.trim()) ci.value = def;
+  });
+};
+
+document.getElementById('bulk-add-row').onclick = () => {
+  const tbody = document.getElementById('bulk-tbody');
+  const idx = tbody.children.length;
+  const def = document.getElementById('bulk-default-class').value.trim();
+  tbody.appendChild(buildBulkRow(idx, def));
+  attachBulkHandlers();
+  updateBulkSummary();
+  // Focus on the first input of the new row
+  const newRow = tbody.lastElementChild;
+  newRow.querySelector('input, select')?.focus();
+};
+
+document.getElementById('bulk-clear').onclick = async () => {
+  if (!(await confirmDialog('Clear all rows?'))) return;
+  buildBulkTable();
+};
+
+document.getElementById('bulk-save').onclick = async () => {
+  const tbody = document.getElementById('bulk-tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  // Reset row state
+  rows.forEach(r => r.classList.remove('row-error', 'row-saved'));
+
+  const toSave = [];
+  rows.forEach(r => {
+    const obj = {};
+    r.querySelectorAll('[data-key]').forEach(el => { obj[el.dataset.key] = el.value.trim(); });
+    if (obj.name_mm || obj.name_en) toSave.push({ row: r, data: obj });
+  });
+
+  if (!toSave.length) { toast('No filled rows to save', 'error'); return; }
+
+  // Validate required fields
+  const invalid = toSave.filter(t => !t.data.name_mm || !t.data.name_en || !t.data.class);
+  if (invalid.length) {
+    invalid.forEach(t => t.row.classList.add('row-error'));
+    toast(`${invalid.length} rows missing Name (MM/EN) or Class`, 'error');
+    return;
+  }
+
+  if (!(await confirmDialog(`Save ${toSave.length} students?`))) return;
+
+  const btn = document.getElementById('bulk-save');
+  btn.disabled = true; btn.textContent = `Saving 0 / ${toSave.length}…`;
+
+  let ok = 0, err = 0;
+  for (let i = 0; i < toSave.length; i++) {
+    const t = toSave[i];
+    btn.textContent = `Saving ${i+1} / ${toSave.length}…`;
+    try {
+      await api('/scms/students', 'POST', t.data);
+      t.row.classList.add('row-saved');
+      ok++;
+    } catch (e) {
+      console.error('Bulk save row error:', e);
+      t.row.classList.add('row-error');
+      const numCell = t.row.querySelector('.row-num span');
+      if (numCell) numCell.title = e.message;
+      err++;
     }
-    const data = await api('GET');
-    allStudents    = data.students || [];
-    teacherClasses = data.teacher_classes || [];
-    document.getElementById('meta').innerHTML =
-      `Logged in as <strong>${escapeHtml(tgUser?.first_name || TG_ID)}</strong> · ${data.role} · ${allStudents.length} students`;
-    renderPills();
-    renderList();
-  } catch (err) {
-    document.getElementById('meta').textContent = '✗ ' + err.message;
-    document.getElementById('list').innerHTML = `
-      <div class="state">
-        <div class="state-emoji">⚠</div>
-        <div class="state-msg">${escapeHtml(err.message)}</div>
-        <div class="state-detail">
-          API: ${escapeHtml(API_BASE)}/scms/students<br>
-          TG_ID: ${escapeHtml(TG_ID || '(none)')}<br>
-          Open browser DevTools (Console) for full request log.
-        </div>
-      </div>`;
+  }
+  btn.disabled = false; btn.textContent = '💾 Save All';
+  toast(`✓ ${ok} saved, ✗ ${err} failed`, err ? 'error' : 'success');
+  if (ok) await loadAll();
+};
+
+// Init bulk default class from teacher's first assigned class
+function primeBulkDefaultClass() {
+  const inp = document.getElementById('bulk-default-class');
+  if (!inp.value && teacherClasses.length) {
+    inp.value = teacherClasses[0];
   }
 }
 
-document.getElementById('search').oninput = renderList;
-loadStudents();
+// ========= KICKOFF =========
+loadAll().then(() => primeBulkDefaultClass());
 </script>
 </body>
 </html>
