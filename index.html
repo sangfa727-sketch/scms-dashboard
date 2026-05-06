@@ -7,223 +7,342 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
-    --bg: #0f1115; --surface: #181b22; --surface-elev: #21252e;
-    --border: #2a2f3a; --text: #e8eaed; --text-dim: #9aa0a6; --text-faint: #6b7280;
-    --accent: #ffb300; --accent-soft: rgba(255, 179, 0, 0.12);
-    --danger: #ef4444; --success: #10b981; --info: #3b82f6;
+    --bg: #0d0f14; --surface: #161a23; --surface-elev: #1f242f; --surface-soft: #1a1e28;
+    --border: #262c39; --border-soft: #1f242f;
+    --text: #e8eaed; --text-dim: #9aa0a6; --text-faint: #6b7280;
+    --accent: #ffb300; --accent-hover: #ffc233; --accent-soft: rgba(255, 179, 0, 0.12);
+    --danger: #ef4444; --danger-soft: rgba(239,68,68,0.12);
+    --success: #10b981; --success-soft: rgba(16,185,129,0.12);
+    --info: #3b82f6; --info-soft: rgba(59,130,246,0.12);
     --house-red: #e35353; --house-blue: #4a90e2; --house-green: #48a868; --house-yellow: #f0c545;
-    --r-md: 10px; --r-lg: 14px; --shadow: 0 8px 30px rgba(0,0,0,0.4);
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 20px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.25);
+    --shadow-lg: 0 12px 36px rgba(0,0,0,0.4);
     --nav-h: 64px;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   body.tg-light {
-    --bg: #f4f5f7; --surface: #ffffff; --surface-elev: #ffffff;
-    --border: #e3e6ea; --text: #1a1d23; --text-dim: #5f6368; --text-faint: #9aa0a6;
-    --shadow: 0 4px 18px rgba(0,0,0,0.08);
+    --bg: #f6f7f9; --surface: #ffffff; --surface-elev: #f4f5f7; --surface-soft: #fafbfc;
+    --border: #e4e7eb; --border-soft: #eef0f3;
+    --text: #1a1d23; --text-dim: #5f6368; --text-faint: #9aa0a6;
+    --shadow-md: 0 2px 12px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body {
     background: var(--bg); color: var(--text);
-    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
     font-size: 15px; line-height: 1.5; min-height: 100vh; -webkit-font-smoothing: antialiased;
     padding-bottom: var(--nav-h);
   }
+
+  /* ===== Top bar ===== */
   .topbar {
     position: sticky; top: 0; z-index: 10;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 14px 16px 12px; backdrop-filter: blur(10px);
+    background: rgba(13, 15, 20, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 12px;
   }
-  .topbar h1 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-  .topbar h1 .icon { font-size: 20px; }
+  body.tg-light .topbar { background: rgba(255,255,255,0.85); }
+  .topbar h1 { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
+  .topbar h1 .icon { font-size: 22px; }
   .meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; word-break: break-word; }
-  .meta strong { color: var(--accent); }
+  .meta strong { color: var(--accent); font-weight: 600; }
 
-  .controls { padding: 12px 16px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  /* ===== Search & pills ===== */
+  .controls { padding: 14px 16px 0; display: flex; gap: 8px; flex-wrap: wrap; }
   .search {
     flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r-md); padding: 9px 12px; color: var(--text); font-size: 14px;
+    border-radius: var(--r-md); padding: 10px 14px; color: var(--text); font-size: 14px;
+    transition: border-color var(--transition), box-shadow var(--transition);
   }
-  .search:focus { outline: none; border-color: var(--accent); }
-  .pills-row { padding: 10px 16px 12px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; align-items: center; }
+  .search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .pills-row {
+    padding: 12px 16px 14px; display: flex; gap: 6px;
+    overflow-x: auto; scrollbar-width: none; align-items: center;
+  }
   .pills-row::-webkit-scrollbar { display: none; }
   .filter-pill {
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 999px; padding: 6px 12px; font-size: 12px;
+    border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 500;
     color: var(--text-dim); cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: all var(--transition);
   }
-  .filter-pill.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .filter-pill:hover { border-color: var(--accent); color: var(--text); }
+  .filter-pill.active {
+    background: var(--accent); border-color: var(--accent); color: #1a1d23; font-weight: 600;
+    box-shadow: 0 2px 8px var(--accent-soft);
+  }
 
   .tab-content { display: none; padding: 0 12px; min-height: 50vh; }
-  .tab-content.active { display: block; }
+  .tab-content.active { display: block; animation: tab-fade 0.25s ease-out; }
+  @keyframes tab-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-  .list { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; }
-  .row-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 12px 14px; cursor: pointer; transition: transform 0.1s, border-color 0.15s;
+  /* ===== Stats summary cards (Students tab) ===== */
+  .summary-strip {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; padding: 0 4px 12px;
   }
+  .summary-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 12px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .summary-num { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; line-height: 1.1; }
+  .summary-lbl { font-size: 11px; color: var(--text-dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* ===== List & cards ===== */
+  .list { display: flex; flex-direction: column; gap: 8px; padding-bottom: 28px; }
+  .class-section { margin-bottom: 6px; }
+  .class-section-title {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 6px 6px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+  }
+  .class-section-title .count {
+    background: var(--accent-soft); color: var(--accent);
+    padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0;
+  }
+  .row-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 12px 14px; cursor: pointer;
+    transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+  }
+  .row-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
   .row-card:active { transform: scale(0.98); }
-  .row-card:hover { border-color: var(--accent); }
   .row-flex { display: flex; align-items: center; gap: 12px; }
   .avatar {
-    width: 38px; height: 38px; border-radius: 50%;
+    width: 40px; height: 40px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
   }
-  .avatar.house-Red    { background: var(--house-red); }
-  .avatar.house-Blue   { background: var(--house-blue); }
-  .avatar.house-Green  { background: var(--house-green); }
-  .avatar.house-Yellow { background: var(--house-yellow); color: #333; }
-  .avatar.house-      { background: var(--text-faint); }
+  .avatar.house-Red    { background: linear-gradient(135deg, #e35353, #c43d3d); }
+  .avatar.house-Blue   { background: linear-gradient(135deg, #4a90e2, #2c6ec5); }
+  .avatar.house-Green  { background: linear-gradient(135deg, #48a868, #2f8a4d); }
+  .avatar.house-Yellow { background: linear-gradient(135deg, #f0c545, #d4a82a); color: #5a4a14; }
+  .avatar.house-       { background: linear-gradient(135deg, #6b7280, #4b5563); }
   .row-info { min-width: 0; flex: 1; }
-  .row-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+  .row-sub { font-size: 12px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .row-sub .dot { color: var(--text-faint); }
-  .badge { background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; flex-shrink: 0; }
-  .badge.success { background: rgba(16,185,129,0.15); color: var(--success); }
-  .badge.danger  { background: rgba(239,68,68,0.15); color: var(--danger); }
-  .badge.info    { background: rgba(59,130,246,0.15); color: var(--info); }
+  .badge {
+    background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px; flex-shrink: 0; letter-spacing: 0.02em;
+  }
+  .badge.success { background: var(--success-soft); color: var(--success); }
+  .badge.danger  { background: var(--danger-soft); color: var(--danger); }
+  .badge.info    { background: var(--info-soft); color: var(--info); }
   .badge.muted   { background: var(--surface-elev); color: var(--text-dim); }
 
+  /* ===== Timetable ===== */
   .timetable-day {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
     margin-bottom: 8px; overflow: hidden;
   }
   .day-header {
-    background: var(--surface-elev); padding: 10px 14px;
-    font-weight: 600; font-size: 14px; color: var(--accent);
+    background: var(--surface-elev); padding: 12px 14px;
+    font-weight: 600; font-size: 13px; color: var(--accent);
+    display: flex; justify-content: space-between; align-items: center;
+    text-transform: uppercase; letter-spacing: 0.05em;
   }
   .period-row {
-    display: grid; grid-template-columns: 60px 1fr auto;
-    gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); align-items: center; font-size: 13px;
+    display: grid; grid-template-columns: 70px 1fr auto;
+    gap: 10px; padding: 11px 14px; border-top: 1px solid var(--border-soft); align-items: center; font-size: 13px;
   }
-  .period-time { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .period-time { color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.3; }
 
-  .state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
-  .state-emoji { font-size: 40px; margin-bottom: 8px; }
+  /* ===== Empty state ===== */
+  .state { text-align: center; padding: 70px 20px 40px; color: var(--text-dim); }
+  .state-emoji { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
   .state-msg { font-size: 14px; word-break: break-word; }
-  .state-detail { font-size: 11px; color: var(--text-faint); margin-top: 12px; word-break: break-all; padding: 0 16px; line-height: 1.6; }
+  .state-detail { font-size: 11px; color: var(--text-faint); margin-top: 12px; word-break: break-all; padding: 0 16px; line-height: 1.6; font-family: ui-monospace, 'SF Mono', monospace; }
 
+  /* ===== FAB ===== */
   .fab {
-    position: fixed; right: 16px; bottom: calc(var(--nav-h) + 12px); width: 56px; height: 56px; border-radius: 50%;
+    position: fixed; right: 16px; bottom: calc(var(--nav-h) + 16px);
+    width: 56px; height: 56px; border-radius: 50%;
     background: var(--accent); color: #1a1d23; border: none; font-size: 26px; font-weight: 700;
-    box-shadow: var(--shadow); cursor: pointer; z-index: 5;
+    box-shadow: var(--shadow-lg); cursor: pointer; z-index: 5;
     display: none; align-items: center; justify-content: center;
+    transition: transform var(--transition);
   }
   .fab.show { display: flex; }
+  .fab:hover { transform: scale(1.05); background: var(--accent-hover); }
   .fab:active { transform: scale(0.92); }
 
+  /* ===== Bottom nav ===== */
   .bottomnav {
     position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h);
-    background: var(--surface); border-top: 1px solid var(--border);
+    background: rgba(22, 26, 35, 0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
     display: flex; justify-content: space-around; align-items: center;
     z-index: 8; overflow-x: auto; scrollbar-width: none; padding: 0 4px;
   }
+  body.tg-light .bottomnav { background: rgba(255,255,255,0.95); }
   .bottomnav::-webkit-scrollbar { display: none; }
   .nav-item {
-    flex: 1 0 auto; min-width: 64px; max-width: 90px;
+    flex: 1 0 auto; min-width: 60px; max-width: 90px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 6px 4px; cursor: pointer;
     color: var(--text-faint); font-size: 10px; line-height: 1.2;
     text-align: center; border: none; background: none; font-family: inherit;
+    transition: color var(--transition), transform var(--transition);
   }
-  .nav-item .nav-emoji { font-size: 20px; margin-bottom: 2px; }
+  .nav-item .nav-emoji { font-size: 19px; margin-bottom: 2px; transition: transform var(--transition); }
   .nav-item.active { color: var(--accent); font-weight: 600; }
+  .nav-item.active .nav-emoji { transform: scale(1.1); }
   .nav-item:active { transform: scale(0.94); }
 
+  /* ===== Modals ===== */
   .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 100;
     display: none; align-items: flex-end;
+    backdrop-filter: blur(2px);
   }
-  .modal-backdrop.show { display: flex; animation: fade-in 0.15s ease-out; }
+  .modal-backdrop.show { display: flex; animation: fade-in 0.18s ease-out; }
   .modal {
     background: var(--surface); width: 100%;
-    border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 20px 18px 24px;
-    max-height: 92vh; overflow-y: auto; animation: slide-up 0.22s ease-out;
+    border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 22px 18px 26px;
+    max-height: 92vh; overflow-y: auto; animation: slide-up 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+    border-top: 1px solid var(--border);
   }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
-  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-  .modal-close { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px 8px; }
-  .form-group { margin-bottom: 12px; }
-  .form-group label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; font-weight: 500; }
+  .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; letter-spacing: -0.01em; }
+  .modal-close { background: none; border: none; color: var(--text-dim); font-size: 24px; cursor: pointer; line-height: 1; padding: 4px 8px; border-radius: var(--r-sm); }
+  .modal-close:hover { background: var(--surface-elev); color: var(--text); }
+  .form-group { margin-bottom: 13px; }
+  .form-group label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; font-weight: 500; }
   .form-group label .req { color: var(--danger); }
   .form-group input, .form-group select, .form-group textarea {
     width: 100%; background: var(--surface-elev); border: 1px solid var(--border);
-    border-radius: var(--r-md); padding: 10px 12px; color: var(--text); font-size: 14px; font-family: inherit;
+    border-radius: var(--r-sm); padding: 10px 12px; color: var(--text); font-size: 14px; font-family: inherit;
+    transition: border-color var(--transition), box-shadow var(--transition);
   }
-  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .modal-actions { display: flex; gap: 10px; margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; }
-  .btn { flex: 1; padding: 11px; border: none; border-radius: var(--r-md); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
-  .btn:active { opacity: 0.7; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .btn {
+    flex: 1; padding: 12px; border: none; border-radius: var(--r-sm);
+    font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+    transition: opacity var(--transition), transform var(--transition);
+  }
+  .btn:active { transform: scale(0.97); }
   .btn-primary { background: var(--accent); color: #1a1d23; }
+  .btn-primary:hover { background: var(--accent-hover); }
   .btn-secondary { background: var(--surface-elev); color: var(--text); border: 1px solid var(--border); }
   .btn-danger { background: var(--danger); color: #fff; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
   .detail-row:last-child { border-bottom: none; }
-  .detail-label { color: var(--text-dim); flex-shrink: 0; margin-right: 12px; }
+  .detail-label { color: var(--text-dim); flex-shrink: 0; margin-right: 12px; font-weight: 500; }
   .detail-value { color: var(--text); text-align: right; word-break: break-word; }
 
+  /* ===== Toast ===== */
   .toast {
-    position: fixed; bottom: calc(var(--nav-h) + 16px); left: 50%; transform: translateX(-50%);
-    background: var(--surface-elev); color: var(--text); padding: 10px 18px;
+    position: fixed; bottom: calc(var(--nav-h) + 18px); left: 50%; transform: translateX(-50%);
+    background: var(--surface-elev); color: var(--text); padding: 11px 18px;
     border-radius: var(--r-md); border: 1px solid var(--border);
-    font-size: 13px; font-weight: 500; z-index: 200; box-shadow: var(--shadow);
-    opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; max-width: 90vw;
+    font-size: 13px; font-weight: 500; z-index: 200; box-shadow: var(--shadow-lg);
+    opacity: 0; pointer-events: none; transition: opacity var(--transition), transform var(--transition);
+    max-width: 90vw;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
-  .toast.success { border-color: var(--success); }
-  .toast.error { border-color: var(--danger); }
+  .toast.success { border-color: var(--success); background: var(--success-soft); color: var(--success); }
+  .toast.error { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
 
+  /* ===== Skeleton loader ===== */
   .skeleton {
     background: linear-gradient(90deg, var(--surface) 25%, var(--surface-elev) 50%, var(--surface) 75%);
-    background-size: 200% 100%; animation: shimmer 1.5s infinite;
-    border-radius: var(--r-lg); height: 64px; margin-bottom: 8px;
+    background-size: 200% 100%; animation: shimmer 1.4s infinite;
+    border-radius: var(--r-md); height: 64px; margin-bottom: 8px;
   }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-  .tab-header {
-    padding: 12px 16px 6px;
-    font-size: 12px; color: var(--text-dim);
-  }
+  .tab-header { padding: 14px 16px 4px; font-size: 12px; color: var(--text-dim); }
 
-  /* ========= BULK ADD TAB ========= */
+  /* ============================================================ */
+  /* ============== BULK ADD — COLLAPSIBLE DESIGN ============== */
+  /* ============================================================ */
+  .bulk-intro {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-elev) 100%);
+    border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: 24px 18px; margin: 0 4px 16px; text-align: center;
+    transition: opacity var(--transition);
+  }
+  .bulk-intro.hidden { display: none; }
+  .bulk-intro-icon { font-size: 44px; margin-bottom: 10px; opacity: 0.85; }
+  .bulk-intro h2 {
+    font-size: 18px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em;
+  }
+  .bulk-intro p {
+    font-size: 13px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.55;
+  }
+  .bulk-cta-row {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  }
+  .bulk-cta {
+    background: var(--accent); color: #1a1d23; border: none;
+    padding: 11px 22px; border-radius: var(--r-sm); font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: background var(--transition), transform var(--transition);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .bulk-cta:hover { background: var(--accent-hover); }
+  .bulk-cta:active { transform: scale(0.97); }
+  .bulk-cta.secondary {
+    background: var(--surface-elev); color: var(--text); border: 1px solid var(--border);
+  }
+  .bulk-cta.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* The actual bulk form panel - hidden by default */
+  .bulk-panel { display: none; }
+  .bulk-panel.show { display: block; animation: tab-fade 0.25s ease-out; }
+
   .bulk-toolbar {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 10px 12px; margin-bottom: 10px;
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 12px 14px; margin-bottom: 12px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
   }
   .bulk-toolbar .field {
-    flex: 1; min-width: 140px;
+    flex: 1; min-width: 130px;
     display: flex; flex-direction: column; gap: 4px;
   }
-  .bulk-toolbar label { font-size: 11px; color: var(--text-dim); }
+  .bulk-toolbar label { font-size: 11px; color: var(--text-dim); font-weight: 500; }
   .bulk-toolbar input, .bulk-toolbar select {
     background: var(--surface-elev); border: 1px solid var(--border);
-    border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+    border-radius: var(--r-sm); padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .bulk-toolbar input:focus, .bulk-toolbar select:focus {
+    outline: none; border-color: var(--accent);
   }
   .bulk-toolbar .btn-mini {
     background: var(--accent-soft); color: var(--accent);
-    border: 1px solid var(--accent); border-radius: 6px;
-    padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
-    height: 33px; align-self: flex-end;
+    border: 1px solid var(--accent); border-radius: var(--r-sm);
+    padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+    height: 35px;
   }
+  .bulk-toolbar .btn-mini.danger { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
   .bulk-table-wrap {
     overflow-x: auto; background: var(--surface);
-    border: 1px solid var(--border); border-radius: var(--r-lg);
-    margin-bottom: 10px;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    margin-bottom: 12px;
   }
   .bulk-table {
     border-collapse: collapse; width: max-content; min-width: 100%;
     font-size: 13px;
   }
   .bulk-table th, .bulk-table td {
-    border: 1px solid var(--border); padding: 0;
+    border: 1px solid var(--border-soft); padding: 0;
     min-width: 110px; vertical-align: middle;
   }
   .bulk-table th {
-    background: var(--surface-elev); padding: 8px 10px;
+    background: var(--surface-elev); padding: 9px 10px;
     font-weight: 600; font-size: 11px; text-transform: uppercase;
     letter-spacing: 0.04em; color: var(--text-dim);
     position: sticky; top: 0; z-index: 1;
@@ -233,17 +352,19 @@
   .bulk-table td { position: relative; }
   .bulk-table td.row-num {
     background: var(--surface-elev); text-align: center;
-    color: var(--text-faint); min-width: 36px; font-size: 11px;
+    color: var(--text-faint); min-width: 40px; font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
   .bulk-table td.row-num button {
     background: none; border: none; color: var(--danger);
-    font-size: 14px; cursor: pointer; padding: 4px 8px;
+    font-size: 14px; cursor: pointer; padding: 4px 6px;
+    transition: opacity var(--transition);
   }
+  .bulk-table td.row-num button:hover { opacity: 0.7; }
   .bulk-table input, .bulk-table select {
     width: 100%; border: none; background: transparent;
-    color: var(--text); padding: 8px 10px; font-size: 13px; font-family: inherit;
-    outline: none; min-height: 36px;
+    color: var(--text); padding: 9px 10px; font-size: 13px; font-family: inherit;
+    outline: none; min-height: 38px;
   }
   .bulk-table tr:hover input,
   .bulk-table tr:hover select {
@@ -253,24 +374,30 @@
     background: var(--accent-soft);
     box-shadow: inset 0 0 0 2px var(--accent);
   }
-  .bulk-table tr.row-error td { background: rgba(239,68,68,0.08); }
-  .bulk-table tr.row-saved td { background: rgba(16,185,129,0.08); }
+  .bulk-table tr.row-error td { background: rgba(239,68,68,0.1); }
+  .bulk-table tr.row-saved td { background: rgba(16,185,129,0.1); }
   .bulk-actions {
     display: flex; gap: 8px; margin-bottom: 18px; padding-bottom: 8px;
   }
   .bulk-actions button {
-    flex: 1; padding: 12px; border-radius: var(--r-md);
+    flex: 1; padding: 13px; border-radius: var(--r-sm);
     font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all var(--transition);
   }
-  .bulk-actions button.primary { background: var(--accent); color: #1a1d23; border-color: var(--accent); }
+  .bulk-actions button:hover { border-color: var(--accent); }
+  .bulk-actions button.primary {
+    background: var(--accent); color: #1a1d23; border-color: var(--accent);
+  }
+  .bulk-actions button.primary:hover { background: var(--accent-hover); }
   .bulk-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
   .bulk-summary {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 10px 14px; font-size: 13px; color: var(--text-dim);
-    margin-bottom: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    padding: 11px 14px; font-size: 13px; color: var(--text-dim);
+    margin-bottom: 12px;
+    display: flex; gap: 18px; flex-wrap: wrap;
   }
-  .bulk-summary strong { color: var(--text); }
+  .bulk-summary strong { color: var(--text); font-weight: 600; }
   .bulk-summary .ok { color: var(--success); font-weight: 600; }
   .bulk-summary .err { color: var(--danger); font-weight: 600; }
 </style>
@@ -278,11 +405,10 @@
 <body>
 
 <header class="topbar">
-  <h1><span class="icon" id="tab-icon">🏫</span> <span id="tab-title">Students</span></h1>
+  <h1><span class="icon" id="tab-icon">👥</span> <span id="tab-title">Students</span></h1>
   <div class="meta" id="meta">Loading…</div>
 </header>
 
-<!-- Hidden datalist providing class suggestions across the app -->
 <datalist id="class-suggestions"></datalist>
 
 <!-- ============ TAB: STUDENTS ============ -->
@@ -291,6 +417,7 @@
     <input class="search" id="search-students" placeholder="🔍 Search by name or class…" />
   </div>
   <div class="pills-row" id="pills-students-row"></div>
+  <div class="summary-strip" id="summary-students"></div>
   <div class="list" id="list-students">
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
   </div>
@@ -298,89 +425,93 @@
 
 <!-- ============ TAB: BULK ADD ============ -->
 <section class="tab-content" data-tab="bulk">
-  <div class="tab-header">⚡ <strong>Bulk Add</strong> — တန်းတူ class တစ်တန်းအတွက် ကျောင်းသား အများကြီးကို တစ်ပြိုင်တည်း ဖြည့်ပြီး Save လုပ်ပါ။ Tab/Enter ဖြင့် field ပြောင်းနိုင်သည်။</div>
-  <div class="bulk-toolbar">
-    <div class="field">
-      <label>Default Class <span style="color:var(--danger)">*</span></label>
-      <input id="bulk-default-class" list="class-suggestions" placeholder="e.g. P4 Online" />
+  <!-- Intro / CTA - shown by default -->
+  <div class="bulk-intro" id="bulk-intro">
+    <div class="bulk-intro-icon">⚡</div>
+    <h2>Bulk Add Students</h2>
+    <p>တန်းတူ class တစ်ခုထဲက ကျောင်းသား အများကြီးကို တစ်ပြိုင်တည်း ဖြည့်ပြီး Save လုပ်နိုင်ပါတယ်။</p>
+    <div class="bulk-cta-row">
+      <button class="bulk-cta" id="bulk-show-form">＋ Start Bulk Entry</button>
     </div>
-    <div class="field">
-      <label>Number of rows</label>
-      <input id="bulk-row-count" type="number" min="1" max="50" value="10" />
-    </div>
-    <button type="button" class="btn-mini" id="bulk-rebuild">↻ Rebuild Table</button>
-    <button type="button" class="btn-mini" id="bulk-add-row">＋ Add Row</button>
+    <p style="font-size:11px; margin-top:14px; margin-bottom:0;">💡 Tab/Enter ဖြင့် field ပြောင်းနိုင်သည်</p>
   </div>
 
-  <div class="bulk-table-wrap">
-    <table class="bulk-table" id="bulk-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th class="req">Name (MM)</th>
-          <th class="req">Name (EN)</th>
-          <th>Class</th>
-          <th>House</th>
-          <th>Gender</th>
-          <th>DOB</th>
-          <th>Parent Name</th>
-          <th>Parent TG ID</th>
-          <th>Parent Phone</th>
-          <th>Phone 2</th>
-          <th>Parent Email</th>
-        </tr>
-      </thead>
-      <tbody id="bulk-tbody"></tbody>
-    </table>
-  </div>
+  <!-- The form panel - hidden by default -->
+  <div class="bulk-panel" id="bulk-panel">
+    <div class="bulk-toolbar">
+      <div class="field">
+        <label>Default Class <span style="color:var(--danger)">*</span></label>
+        <input id="bulk-default-class" list="class-suggestions" placeholder="e.g. P4 Online" />
+      </div>
+      <div class="field">
+        <label>Number of rows</label>
+        <input id="bulk-row-count" type="number" min="1" max="50" value="10" />
+      </div>
+      <button type="button" class="btn-mini" id="bulk-rebuild">↻ Rebuild</button>
+      <button type="button" class="btn-mini" id="bulk-add-row">＋ Row</button>
+      <button type="button" class="btn-mini danger" id="bulk-cancel">✕ Close</button>
+    </div>
 
-  <div class="bulk-summary" id="bulk-summary">Total rows: <strong id="bulk-total">0</strong> · Filled: <strong id="bulk-filled">0</strong></div>
+    <div class="bulk-table-wrap">
+      <table class="bulk-table" id="bulk-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th class="req">Name (MM)</th>
+            <th class="req">Name (EN)</th>
+            <th class="req">Class</th>
+            <th>House</th>
+            <th>Gender</th>
+            <th>DOB</th>
+            <th>Parent Name</th>
+            <th>Parent TG ID</th>
+            <th>Parent Phone</th>
+            <th>Phone 2</th>
+            <th>Parent Email</th>
+          </tr>
+        </thead>
+        <tbody id="bulk-tbody"></tbody>
+      </table>
+    </div>
 
-  <div class="bulk-actions">
-    <button type="button" id="bulk-clear">🗑 Clear All</button>
-    <button type="button" class="primary" id="bulk-save">💾 Save All</button>
+    <div class="bulk-summary" id="bulk-summary">
+      <span>Rows: <strong id="bulk-total">0</strong></span>
+      <span>Filled: <strong id="bulk-filled">0</strong></span>
+      <span id="bulk-status"></span>
+    </div>
+
+    <div class="bulk-actions">
+      <button type="button" id="bulk-clear">🗑 Clear</button>
+      <button type="button" class="primary" id="bulk-save">💾 Save All</button>
+    </div>
   </div>
 </section>
 
-<!-- ============ TAB: ATTENDANCE ============ -->
+<!-- ============ Other tabs (unchanged) ============ -->
 <section class="tab-content" data-tab="attendance">
-  <div class="controls">
-    <input class="search" id="search-attendance" placeholder="🔍 Search by name or date…" />
-  </div>
+  <div class="controls"><input class="search" id="search-attendance" placeholder="🔍 Search by name or date…" /></div>
   <div class="pills-row" id="pills-attendance-row"></div>
   <div class="list" id="list-attendance"><div class="skeleton"></div></div>
 </section>
-
-<!-- ============ TAB: DAILY REPORTS ============ -->
 <section class="tab-content" data-tab="daily_reports">
   <div class="controls"><input class="search" id="search-daily" placeholder="🔍 Search reports…" /></div>
   <div class="list" id="list-daily"><div class="skeleton"></div></div>
 </section>
-
-<!-- ============ TAB: HOMEWORK ============ -->
 <section class="tab-content" data-tab="homework">
   <div class="controls"><input class="search" id="search-homework" placeholder="🔍 Search subject or class…" /></div>
   <div class="list" id="list-homework"><div class="skeleton"></div></div>
 </section>
-
-<!-- ============ TAB: PARENT COMMS ============ -->
 <section class="tab-content" data-tab="parent_comms">
   <div class="controls"><input class="search" id="search-comms" placeholder="🔍 Search type or student…" /></div>
   <div class="list" id="list-comms"><div class="skeleton"></div></div>
 </section>
-
-<!-- ============ TAB: INCIDENTS ============ -->
 <section class="tab-content" data-tab="incidents">
   <div class="controls"><input class="search" id="search-incidents" placeholder="🔍 Search incident…" /></div>
   <div class="list" id="list-incidents"><div class="skeleton"></div></div>
 </section>
-
-<!-- ============ TAB: MONTHLY ============ -->
 <section class="tab-content" data-tab="monthly_summary">
   <div class="list" id="list-monthly"><div class="skeleton"></div></div>
 </section>
-
-<!-- ============ TAB: TIMETABLE ============ -->
 <section class="tab-content" data-tab="timetable">
   <div class="pills-row" id="pills-timetable-row"></div>
   <div class="list" id="list-timetable"><div class="skeleton"></div></div>
@@ -395,7 +526,7 @@
   <button class="nav-item" data-target="daily_reports"><span class="nav-emoji">📋</span><span>Daily</span></button>
   <button class="nav-item" data-target="homework"><span class="nav-emoji">📝</span><span>Homework</span></button>
   <button class="nav-item" data-target="parent_comms"><span class="nav-emoji">📬</span><span>Parents</span></button>
-  <button class="nav-item" data-target="incidents"><span class="nav-emoji">⚡</span><span>Incidents</span></button>
+  <button class="nav-item" data-target="incidents"><span class="nav-emoji">⚡</span><span>Incident</span></button>
   <button class="nav-item" data-target="monthly_summary"><span class="nav-emoji">📊</span><span>Monthly</span></button>
   <button class="nav-item" data-target="timetable"><span class="nav-emoji">📅</span><span>Schedule</span></button>
 </nav>
@@ -470,7 +601,6 @@ const tgUser = tg?.initDataUnsafe?.user;
 const TG_ID = tgUser?.id ? String(tgUser.id) : (new URLSearchParams(location.search).get('tg_id') || '');
 if (tg?.colorScheme === 'light') document.body.classList.add('tg-light');
 
-// ========= STATE =========
 let currentTab = 'students';
 let userRole = '';
 let teacherClasses = [];
@@ -481,7 +611,6 @@ let allData = {
 };
 let activeFilters = { students: 'ALL', attendance: 'ALL', timetable: 'ALL' };
 
-// ========= HELPERS =========
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
 const initials = s => {
   const t = String(s || '?').trim().split(/\s+/);
@@ -493,11 +622,9 @@ const houseClass = h => {
   return m ? 'house-' + m[0].charAt(0).toUpperCase() + m[0].slice(1).toLowerCase() : '';
 };
 function activeClassNames() {
-  // Prefer derived class_list from API, then teacher's assigned classes, then defaults.
   const list = (allData.class_list || []).map(c => c.Class_Name || c).filter(Boolean);
   if (list.length) return list;
   if (teacherClasses.length) return teacherClasses.slice();
-  // Last resort — also derive from in-memory students if any
   const fromStudents = Array.from(new Set((allData.students || []).map(s => s.Class).filter(Boolean)));
   if (fromStudents.length) return fromStudents;
   return ['KG','P1','P2','P3','P4','P5'];
@@ -519,7 +646,6 @@ function confirmDialog(msg) {
   });
 }
 
-// ========= API =========
 async function api(path, method, body) {
   const url = new URL(API_BASE + path);
   if (method === 'GET' || method === 'DELETE') {
@@ -539,7 +665,7 @@ async function api(path, method, body) {
     txt = await res.text();
     if (txt) { try { json = JSON.parse(txt); } catch (e) {} }
   } catch (netErr) { throw new Error('Network: ' + netErr.message); }
-  console.log('[API]', method, url.pathname, '→', res.status);
+  console.log('[API]', method, url.pathname, '→', res.status, json || txt);
   if (!res.ok) {
     const msg = (json && (json.error || json._message)) || `HTTP ${res.status}: ${txt.slice(0, 100) || 'no body'}`;
     throw new Error(msg);
@@ -549,7 +675,6 @@ async function api(path, method, body) {
   return json;
 }
 
-// ========= LOAD =========
 async function loadAll() {
   try {
     if (!TG_ID) {
@@ -570,7 +695,7 @@ async function loadAll() {
         attendance: [], daily_reports: [], homework: [],
         parent_comms: [], incidents: [], monthly_summary: [], timetable: []
       };
-      toast('ⓘ /scms/data endpoint မရှိ — basic mode', '');
+      toast('ⓘ Basic mode — /scms/data unavailable', '');
     }
 
     userRole       = data.role || '';
@@ -598,7 +723,7 @@ async function loadAll() {
   } catch (err) {
     document.getElementById('meta').textContent = '✗ ' + err.message;
     document.querySelectorAll('.tab-content').forEach(el => {
-      el.querySelector('.list, .stats-grid, .bulk-table-wrap')?.remove();
+      el.querySelector('.list, .summary-strip, .bulk-table-wrap')?.remove();
       const errBox = `
         <div class="state">
           <div class="state-emoji">⚠</div>
@@ -614,7 +739,6 @@ async function loadAll() {
   }
 }
 
-// ========= RENDERERS =========
 function renderClassPills(scope) {
   const row = document.getElementById('pills-' + scope + '-row');
   if (!row) return;
@@ -633,28 +757,71 @@ function renderClassPills(scope) {
   );
 }
 
+// ====== STUDENTS — improved with summary strip + class grouping ======
 function renderStudents() {
   const list = document.getElementById('list-students');
+  const summaryEl = document.getElementById('summary-students');
   const q = (document.getElementById('search-students').value || '').trim().toLowerCase();
   let arr = (allData.students || []).filter(s => String(s.Status || 'Active').toLowerCase() !== 'inactive');
+
+  // Always compute summary from full active list
+  const totalActive = arr.length;
+  const houseCounts = { Red: 0, Blue: 0, Green: 0, Yellow: 0 };
+  arr.forEach(s => {
+    const m = String(s.House_Color || '').match(/Red|Blue|Green|Yellow/i);
+    if (m) houseCounts[m[0].charAt(0).toUpperCase() + m[0].slice(1).toLowerCase()]++;
+  });
+  const classCount = new Set(arr.map(s => s.Class).filter(Boolean)).size;
+
+  summaryEl.innerHTML = `
+    <div class="summary-card"><div class="summary-num">${totalActive}</div><div class="summary-lbl">Students</div></div>
+    <div class="summary-card"><div class="summary-num">${classCount}</div><div class="summary-lbl">Classes</div></div>
+    <div class="summary-card"><div class="summary-num">${Object.values(houseCounts).reduce((a,b)=>a+b,0)}</div><div class="summary-lbl">Housed</div></div>
+  `;
+
+  // Apply filters
   if (activeFilters.students !== 'ALL') arr = arr.filter(s => String(s.Class || '') === activeFilters.students);
   if (q) arr = arr.filter(s => `${s.Name_MM} ${s.Name_EN} ${s.Class}`.toLowerCase().includes(q));
-  if (!arr.length) { list.innerHTML = stateBlock('📭', 'No students found'); return; }
-  list.innerHTML = arr.map(s => `
-    <div class="row-card" data-id="${escapeHtml(s.Student_ID)}" data-action="edit-student">
-      <div class="row-flex">
-        <div class="avatar ${houseClass(s.House_Color)}">${escapeHtml(initials(s.Name_EN || s.Name_MM))}</div>
-        <div class="row-info">
-          <div class="row-title">${escapeHtml(s.Name_MM || s.Name_EN || 'Unnamed')}</div>
-          <div class="row-sub">
-            <span>${escapeHtml(s.Name_EN || '')}</span>
-            ${s.Gender ? `<span class="dot">·</span><span>${escapeHtml(s.Gender)}</span>` : ''}
-            ${s.Date_of_Birth ? `<span class="dot">·</span><span>${escapeHtml(fmtDate(s.Date_of_Birth))}</span>` : ''}
-          </div>
+
+  if (!arr.length) { list.innerHTML = stateBlock('📭', 'No students found', 'Tap ＋ to add the first one'); return; }
+
+  // Group by class for richer presentation
+  const byClass = {};
+  arr.forEach(s => {
+    const c = s.Class || '—';
+    (byClass[c] = byClass[c] || []).push(s);
+  });
+  const sortedClasses = Object.keys(byClass).sort();
+
+  list.innerHTML = sortedClasses.map(c => {
+    const studs = byClass[c].slice().sort((a, b) =>
+      String(a.Name_EN || a.Name_MM || '').localeCompare(String(b.Name_EN || b.Name_MM || ''))
+    );
+    return `
+      <div class="class-section">
+        <div class="class-section-title">
+          <span>📚 ${escapeHtml(c)}</span>
+          <span class="count">${studs.length}</span>
         </div>
-        <span class="badge">${escapeHtml(s.Class || '?')}</span>
-      </div>
-    </div>`).join('');
+        ${studs.map(s => `
+          <div class="row-card" data-id="${escapeHtml(s.Student_ID)}" data-action="edit-student">
+            <div class="row-flex">
+              <div class="avatar ${houseClass(s.House_Color)}">${escapeHtml(initials(s.Name_EN || s.Name_MM))}</div>
+              <div class="row-info">
+                <div class="row-title">${escapeHtml(s.Name_MM || s.Name_EN || 'Unnamed')}</div>
+                <div class="row-sub">
+                  ${s.Name_EN ? `<span>${escapeHtml(s.Name_EN)}</span>` : ''}
+                  ${s.Gender ? `<span class="dot">·</span><span>${s.Gender === 'M' ? '♂' : s.Gender === 'F' ? '♀' : escapeHtml(s.Gender)}</span>` : ''}
+                  ${s.Date_of_Birth ? `<span class="dot">·</span><span>🎂 ${escapeHtml(fmtDate(s.Date_of_Birth))}</span>` : ''}
+                  ${s.House_Color ? `<span class="dot">·</span><span>${escapeHtml(s.House_Color)}</span>` : ''}
+                </div>
+              </div>
+              <span class="badge">${escapeHtml(s.Class || '?')}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  }).join('');
   bindCardClicks(list);
 }
 
@@ -830,10 +997,10 @@ function renderTimetable() {
     const periods = grouped[d].slice().sort((a,b) => (parseInt(a.Period)||0) - (parseInt(b.Period)||0));
     return `
       <div class="timetable-day">
-        <div class="day-header">${escapeHtml(d)} · ${periods.length} periods</div>
+        <div class="day-header"><span>${escapeHtml(d)}</span><span style="opacity:0.6">${periods.length} periods</span></div>
         ${periods.map(p => `
           <div class="period-row">
-            <div class="period-time">${escapeHtml(p.Start_Time||'')}–${escapeHtml(p.End_Time||'')}</div>
+            <div class="period-time">${escapeHtml(p.Start_Time||'')}<br>${escapeHtml(p.End_Time||'')}</div>
             <div>
               <div style="font-weight:600;">${escapeHtml(p.Subject || 'Subject')}</div>
               <div class="row-sub">
@@ -849,7 +1016,8 @@ function renderTimetable() {
   }).join('');
 }
 
-const stateBlock = (emoji, msg) => `<div class="state"><div class="state-emoji">${emoji}</div><div class="state-msg">${escapeHtml(msg)}</div></div>`;
+const stateBlock = (emoji, msg, sub = '') =>
+  `<div class="state"><div class="state-emoji">${emoji}</div><div class="state-msg">${escapeHtml(msg)}</div>${sub ? `<div style="font-size:12px; margin-top:6px; color:var(--text-faint);">${escapeHtml(sub)}</div>` : ''}</div>`;
 
 function bindCardClicks(container) {
   container.querySelectorAll('.row-card').forEach(el => {
@@ -887,9 +1055,6 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     document.getElementById('tab-icon').textContent = meta.icon;
     document.getElementById('tab-title').textContent = meta.title;
     updateFab();
-    if (target === 'bulk' && !document.getElementById('bulk-tbody').children.length) {
-      buildBulkTable();
-    }
   };
 });
 
@@ -996,7 +1161,7 @@ document.getElementById('btn-student-delete').onclick = async () => {
 function showDetail(title, obj) {
   document.getElementById('md-title').textContent = title;
   const body = document.getElementById('md-body');
-  body.innerHTML = Object.keys(obj).filter(k => obj[k] !== null && obj[k] !== '' && obj[k] !== undefined)
+  body.innerHTML = Object.keys(obj).filter(k => obj[k] !== null && obj[k] !== '' && obj[k] !== undefined && !k.startsWith('_'))
     .map(k => `<div class="detail-row"><span class="detail-label">${escapeHtml(k)}</span><span class="detail-value">${escapeHtml(String(obj[k]))}</span></div>`)
     .join('');
   document.getElementById('modal-detail').classList.add('show');
@@ -1010,12 +1175,12 @@ document.querySelectorAll('.modal-backdrop').forEach(m => {
 });
 
 // ============================================================
-// BULK ADD TAB — spreadsheet-style table
+// BULK ADD — collapsible spreadsheet-style
 // ============================================================
 const BULK_FIELDS = [
   { key: 'name_mm',       type: 'text',  required: true,  placeholder: 'မောင်မောင်' },
   { key: 'name_en',       type: 'text',  required: true,  placeholder: 'Maung Maung' },
-  { key: 'class',         type: 'text',  list: 'class-suggestions' },
+  { key: 'class',         type: 'text',  required: true,  list: 'class-suggestions' },
   { key: 'house_color',   type: 'select', options: ['', '🔴 Red', '🔵 Blue', '🟢 Green', '🟡 Yellow'] },
   { key: 'gender',        type: 'select', options: ['', 'M', 'F'] },
   { key: 'dob',           type: 'date'  },
@@ -1025,6 +1190,11 @@ const BULK_FIELDS = [
   { key: 'parent_phone2', type: 'tel'   },
   { key: 'parent_email',  type: 'email' }
 ];
+
+function showBulkPanel(show) {
+  document.getElementById('bulk-intro').classList.toggle('hidden', show);
+  document.getElementById('bulk-panel').classList.toggle('show', show);
+}
 
 function buildBulkRow(idx, defaultClass = '') {
   const tr = document.createElement('tr');
@@ -1067,7 +1237,6 @@ function attachBulkHandlers() {
     btn.onclick = (e) => {
       const tr = e.target.closest('tr');
       tr.remove();
-      // Renumber
       tbody.querySelectorAll('tr').forEach((r, i) => {
         r.dataset.idx = i;
         const numSpan = r.querySelector('.row-num span');
@@ -1076,7 +1245,6 @@ function attachBulkHandlers() {
       updateBulkSummary();
     };
   });
-  // Tab/Enter navigation: pressing Enter in a cell moves to the same column in next row
   tbody.querySelectorAll('input, select').forEach(inp => {
     inp.onkeydown = (e) => {
       if (e.key === 'Enter') {
@@ -1107,18 +1275,34 @@ function updateBulkSummary() {
   document.getElementById('bulk-filled').textContent = filled;
 }
 
-document.getElementById('bulk-rebuild').onclick = () => {
+// === Bulk Add CTA handlers ===
+document.getElementById('bulk-show-form').onclick = () => {
+  showBulkPanel(true);
+  // Prime default class
+  const inp = document.getElementById('bulk-default-class');
+  if (!inp.value && teacherClasses.length) inp.value = teacherClasses[0];
+  buildBulkTable();
+};
+
+document.getElementById('bulk-cancel').onclick = async () => {
+  const tbody = document.getElementById('bulk-tbody');
+  // If there's filled data, confirm
+  const hasData = Array.from(tbody.querySelectorAll('input[data-key="name_mm"]'))
+    .some(inp => inp.value.trim());
+  if (hasData && !(await confirmDialog('Close bulk form? Unsaved data will be lost.'))) return;
+  showBulkPanel(false);
+  document.getElementById('bulk-tbody').innerHTML = '';
+  document.getElementById('bulk-status').textContent = '';
+};
+
+document.getElementById('bulk-rebuild').onclick = async () => {
   if (document.getElementById('bulk-tbody').children.length > 0) {
-    confirmDialog('Rebuild table? Unsaved data will be lost.').then(ok => {
-      if (ok) buildBulkTable();
-    });
-  } else {
-    buildBulkTable();
+    if (!(await confirmDialog('Rebuild table? Unsaved data will be lost.'))) return;
   }
+  buildBulkTable();
 };
 
 document.getElementById('bulk-default-class').oninput = () => {
-  // Apply default class to empty class fields
   const def = document.getElementById('bulk-default-class').value.trim();
   if (!def) return;
   document.getElementById('bulk-tbody').querySelectorAll('tr').forEach(r => {
@@ -1134,7 +1318,6 @@ document.getElementById('bulk-add-row').onclick = () => {
   tbody.appendChild(buildBulkRow(idx, def));
   attachBulkHandlers();
   updateBulkSummary();
-  // Focus on the first input of the new row
   const newRow = tbody.lastElementChild;
   newRow.querySelector('input, select')?.focus();
 };
@@ -1147,7 +1330,6 @@ document.getElementById('bulk-clear').onclick = async () => {
 document.getElementById('bulk-save').onclick = async () => {
   const tbody = document.getElementById('bulk-tbody');
   const rows = Array.from(tbody.querySelectorAll('tr'));
-  // Reset row state
   rows.forEach(r => r.classList.remove('row-error', 'row-saved'));
 
   const toSave = [];
@@ -1159,7 +1341,6 @@ document.getElementById('bulk-save').onclick = async () => {
 
   if (!toSave.length) { toast('No filled rows to save', 'error'); return; }
 
-  // Validate required fields
   const invalid = toSave.filter(t => !t.data.name_mm || !t.data.name_en || !t.data.class);
   if (invalid.length) {
     invalid.forEach(t => t.row.classList.add('row-error'));
@@ -1170,12 +1351,15 @@ document.getElementById('bulk-save').onclick = async () => {
   if (!(await confirmDialog(`Save ${toSave.length} students?`))) return;
 
   const btn = document.getElementById('bulk-save');
-  btn.disabled = true; btn.textContent = `Saving 0 / ${toSave.length}…`;
+  const statusEl = document.getElementById('bulk-status');
+  btn.disabled = true;
 
   let ok = 0, err = 0;
+  const errMsgs = [];
   for (let i = 0; i < toSave.length; i++) {
     const t = toSave[i];
     btn.textContent = `Saving ${i+1} / ${toSave.length}…`;
+    statusEl.innerHTML = `<span class="ok">✓ ${ok}</span> · <span class="err">✗ ${err}</span>`;
     try {
       await api('/scms/students', 'POST', t.data);
       t.row.classList.add('row-saved');
@@ -1185,24 +1369,36 @@ document.getElementById('bulk-save').onclick = async () => {
       t.row.classList.add('row-error');
       const numCell = t.row.querySelector('.row-num span');
       if (numCell) numCell.title = e.message;
+      errMsgs.push(`Row ${i+1}: ${e.message}`);
       err++;
     }
   }
   btn.disabled = false; btn.textContent = '💾 Save All';
-  toast(`✓ ${ok} saved, ✗ ${err} failed`, err ? 'error' : 'success');
+  statusEl.innerHTML = `<span class="ok">✓ ${ok}</span> · <span class="err">✗ ${err}</span>`;
+
+  if (err) {
+    toast(`Saved ${ok}, ${err} failed — see console`, 'error');
+    console.error('Bulk errors:\n' + errMsgs.join('\n'));
+  } else {
+    toast(`✓ All ${ok} students saved!`, 'success');
+  }
+
   if (ok) await loadAll();
+
+  // If all saved successfully, auto-collapse back to intro after 1.5s
+  if (ok && !err) {
+    setTimeout(() => {
+      showBulkPanel(false);
+      document.getElementById('bulk-tbody').innerHTML = '';
+      statusEl.textContent = '';
+      // Switch to Students tab to show the new entries
+      document.querySelector('.nav-item[data-target="students"]').click();
+    }, 1500);
+  }
 };
 
-// Init bulk default class from teacher's first assigned class
-function primeBulkDefaultClass() {
-  const inp = document.getElementById('bulk-default-class');
-  if (!inp.value && teacherClasses.length) {
-    inp.value = teacherClasses[0];
-  }
-}
-
 // ========= KICKOFF =========
-loadAll().then(() => primeBulkDefaultClass());
+loadAll();
 </script>
 </body>
 </html>
