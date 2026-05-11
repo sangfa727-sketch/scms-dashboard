@@ -1,862 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
-<title>SCMS — School Class Management</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#FAFAF7">
+  <title>SCMS — School Class Management</title>
 
-<!-- Telegram Web App SDK -->
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<!-- Fonts: distinctive editorial pairing -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<style>
-/* ============================================================
-   SCMS Mini App — Design System
-   Aesthetic: Editorial calm × tactile cards × Telegram-native
-   ============================================================ */
-:root {
-  /* Brand */
-  --brand: #F59E0B;
-  --brand-soft: #FEF3C7;
-  --brand-deep: #B45309;
-  --ink: #0F172A;
-  --ink-2: #334155;
-  --ink-3: #64748B;
-  --ink-4: #94A3B8;
-  --paper: #FAFAF7;
-  --paper-2: #FFFFFF;
-  --line: #E5E7EB;
-  --line-2: #F1F5F9;
+  <!-- Fonts: distinctive editorial pairing -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  /* Status */
-  --green: #10B981;
-  --green-soft: #D1FAE5;
-  --red: #EF4444;
-  --red-soft: #FEE2E2;
-  --blue: #3B82F6;
-  --blue-soft: #DBEAFE;
-  --purple: #8B5CF6;
-  --purple-soft: #EDE9FE;
-  --pink: #EC4899;
-  --pink-soft: #FCE7F3;
-
-  /* Houses */
-  --h-blue:#3B82F6; --h-yellow:#EAB308; --h-green:#10B981; --h-red:#EF4444;
-
-  /* Shadow & Radii */
-  --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-xl: 24px;
-  --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
-  --shadow-md: 0 4px 12px rgba(15,23,42,.06), 0 2px 4px rgba(15,23,42,.04);
-  --shadow-lg: 0 12px 32px rgba(15,23,42,.10), 0 4px 8px rgba(15,23,42,.05);
-
-  /* Telegram overrides */
-  --tg-bg: var(--tg-theme-bg-color, var(--paper));
-  --tg-text: var(--tg-theme-text-color, var(--ink));
-  --tg-hint: var(--tg-theme-hint-color, var(--ink-3));
-  --tg-link: var(--tg-theme-link-color, var(--brand-deep));
-  --tg-button: var(--tg-theme-button-color, var(--brand));
-  --tg-button-text: var(--tg-theme-button-text-color, #fff);
-
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body {
-  margin: 0; padding: 0;
-  background: var(--tg-bg);
-  color: var(--tg-text);
-  font-family: 'Inter Tight', -apple-system, system-ui, sans-serif;
-  font-size: 15px; line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  overscroll-behavior: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-input, textarea { user-select: text; -webkit-user-select: text; }
-
-/* Typography */
-h1, h2, h3, .display {
-  font-family: 'Fraunces', Georgia, serif;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  line-height: 1.15;
-  margin: 0;
-}
-.mono { font-family: 'JetBrains Mono', monospace; }
-
-/* ============================================================
-   APP SHELL
-   ============================================================ */
-#app {
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding-top: var(--safe-top);
-  padding-bottom: calc(72px + var(--safe-bottom));
-  position: relative;
-}
-
-/* ---------- Top Header ---------- */
-.app-header {
-  position: sticky; top: 0; z-index: 50;
-  padding: calc(var(--safe-top) + 12px) 18px 14px;
-  background: var(--tg-bg);
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(10px);
-}
-.app-header.scrolled {
-  box-shadow: var(--shadow-sm);
-}
-.header-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px;
-}
-.school-info { min-width: 0; flex: 1; }
-.school-name {
-  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
-  color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.school-meta {
-  font-size: 12px; color: var(--ink-3); margin-top: 2px;
-  display: flex; align-items: center; gap: 6px;
-}
-.school-meta .dot { width: 3px; height: 3px; background: var(--ink-4); border-radius: 50%; }
-.role-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  background: var(--brand-soft); color: var(--brand-deep);
-  padding: 3px 8px; border-radius: 6px; font-size: 11px;
-  font-weight: 600; letter-spacing: 0.02em;
-}
-.header-actions { display: flex; gap: 8px; }
-.icon-btn {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: var(--line-2); border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--ink-2); transition: all .2s;
-}
-.icon-btn:active { transform: scale(0.92); background: var(--line); }
-.icon-btn svg { width: 18px; height: 18px; }
-
-/* ---------- Page Container ---------- */
-.page {
-  display: none;
-  padding: 16px 18px 24px;
-  animation: pageIn .35s cubic-bezier(.2,.7,.3,1);
-}
-.page.active { display: block; }
-@keyframes pageIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ---------- Page Header ---------- */
-.page-header {
-  margin-bottom: 16px;
-}
-.page-eyebrow {
-  font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--brand-deep);
-  margin-bottom: 4px;
-}
-.page-title {
-  font-family: 'Fraunces', serif; font-weight: 700;
-  font-size: 32px; letter-spacing: -0.025em;
-  color: var(--ink);
-}
-.page-title em {
-  font-style: italic; font-weight: 400;
-  color: var(--brand-deep);
-}
-.page-subtitle {
-  font-size: 13px; color: var(--ink-3); margin-top: 6px;
-}
-
-/* ---------- Stats Grid ---------- */
-.stats-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px; margin-bottom: 18px;
-}
-.stat-card {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 12px 10px;
-  display: flex; flex-direction: column; gap: 2px;
-  transition: all .2s;
-}
-.stat-card.accent { background: var(--brand); border-color: var(--brand); }
-.stat-card.accent .stat-value, .stat-card.accent .stat-label { color: #fff; }
-.stat-value {
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 26px; line-height: 1; color: var(--ink);
-  letter-spacing: -0.02em;
-}
-.stat-label {
-  font-size: 10.5px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--ink-3); margin-top: 4px;
-}
-
-/* ---------- Search Bar ---------- */
-.search-bar {
-  position: relative; margin-bottom: 14px;
-}
-.search-bar input {
-  width: 100%; height: 44px;
-  padding: 0 14px 0 42px;
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); font-size: 14px;
-  color: var(--ink); outline: none;
-  font-family: inherit;
-  transition: all .2s;
-}
-.search-bar input:focus {
-  border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft);
-}
-.search-bar input::placeholder { color: var(--ink-4); }
-.search-bar .search-icon {
-  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-  color: var(--ink-4); pointer-events: none;
-}
-.search-bar .clear-btn {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  width: 28px; height: 28px; border-radius: 50%; border: none;
-  background: var(--line-2); color: var(--ink-3);
-  display: none; align-items: center; justify-content: center; cursor: pointer;
-}
-.search-bar.has-value .clear-btn { display: flex; }
-
-/* ---------- Filter Chips ---------- */
-.chips-row {
-  display: flex; gap: 6px; overflow-x: auto;
-  padding: 0 0 6px; margin: 0 -18px 14px;
-  padding-left: 18px; padding-right: 18px;
-  scrollbar-width: none; -ms-overflow-style: none;
-}
-.chips-row::-webkit-scrollbar { display: none; }
-.chip {
-  flex-shrink: 0; padding: 8px 14px;
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: 100px; font-size: 13px; font-weight: 500;
-  color: var(--ink-2); cursor: pointer;
-  transition: all .2s; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.chip .chip-count {
-  background: var(--line-2); color: var(--ink-3);
-  padding: 1px 6px; border-radius: 8px;
-  font-size: 11px; font-weight: 600;
-}
-.chip.active {
-  background: var(--ink); color: #fff; border-color: var(--ink);
-}
-.chip.active .chip-count { background: rgba(255,255,255,.18); color: #fff; }
-.chip:active { transform: scale(0.96); }
-
-/* ---------- Section Header ---------- */
-.section-header {
-  display: flex; align-items: baseline; justify-content: space-between;
-  margin: 18px 0 10px;
-}
-.section-title {
-  font-family: 'Fraunces', serif; font-size: 18px; font-weight: 600;
-  letter-spacing: -0.01em; color: var(--ink);
-}
-.section-title em { font-style: italic; color: var(--brand-deep); }
-.section-action {
-  font-size: 12px; font-weight: 600; color: var(--brand-deep);
-  cursor: pointer; padding: 4px 0;
-}
-
-/* ---------- Student Card ---------- */
-.student-list {
-  display: flex; flex-direction: column; gap: 8px;
-}
-.student-card {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 12px;
-  display: flex; align-items: center; gap: 12px;
-  cursor: pointer; transition: all .2s;
-  position: relative;
-}
-.student-card:active { transform: scale(0.98); background: var(--line-2); }
-.student-card .avatar {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--brand-soft) 0%, #FED7AA 100%);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 17px; color: var(--brand-deep);
-  flex-shrink: 0; position: relative;
-}
-.student-card .avatar.h-blue { background: linear-gradient(135deg, #DBEAFE, #93C5FD); color: #1E40AF; }
-.student-card .avatar.h-yellow { background: linear-gradient(135deg, #FEF3C7, #FDE68A); color: #92400E; }
-.student-card .avatar.h-green { background: linear-gradient(135deg, #D1FAE5, #6EE7B7); color: #065F46; }
-.student-card .avatar.h-red { background: linear-gradient(135deg, #FEE2E2, #FCA5A5); color: #991B1B; }
-.student-card .info { flex: 1; min-width: 0; }
-.student-card .name {
-  font-size: 14.5px; font-weight: 600; color: var(--ink);
-  letter-spacing: -0.01em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.student-card .name-mm {
-  font-size: 12px; color: var(--ink-3); margin-top: 1px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.student-card .badges {
-  display: flex; gap: 6px; align-items: center;
-  flex-shrink: 0;
-}
-.tag {
-  font-size: 10.5px; font-weight: 600;
-  padding: 3px 8px; border-radius: 6px;
-  letter-spacing: 0.02em;
-  background: var(--brand-soft); color: var(--brand-deep);
-}
-.tag.green { background: var(--green-soft); color: #065F46; }
-.tag.red { background: var(--red-soft); color: #991B1B; }
-.tag.blue { background: var(--blue-soft); color: #1E40AF; }
-.tag.purple { background: var(--purple-soft); color: #5B21B6; }
-.tag.gray { background: var(--line-2); color: var(--ink-2); }
-
-/* ---------- Empty State ---------- */
-.empty {
-  text-align: center; padding: 40px 20px;
-  color: var(--ink-3);
-}
-.empty .empty-icon {
-  font-size: 36px; margin-bottom: 12px; opacity: 0.5;
-}
-.empty .empty-title {
-  font-family: 'Fraunces', serif; font-size: 17px;
-  color: var(--ink-2); margin-bottom: 4px;
-}
-.empty .empty-text { font-size: 13px; }
-
-/* ---------- Section Group (P4 Online, etc.) ---------- */
-.group-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 0 8px;
-}
-.group-title {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--ink-2);
-}
-.group-title .swatch {
-  width: 6px; height: 16px; border-radius: 3px;
-  background: var(--brand);
-}
-.group-count {
-  background: var(--line-2); color: var(--ink-3);
-  font-size: 11px; font-weight: 600;
-  padding: 2px 8px; border-radius: 8px;
-}
-
-/* ============================================================
-   FAB
-   ============================================================ */
-.fab {
-  position: fixed; bottom: calc(80px + var(--safe-bottom));
-  right: 18px; z-index: 40;
-  width: 54px; height: 54px; border-radius: 50%;
-  background: var(--brand); color: #fff;
-  border: none; cursor: pointer;
-  box-shadow: var(--shadow-lg), 0 0 0 6px rgba(245, 158, 11, .12);
-  display: flex; align-items: center; justify-content: center;
-  transition: transform .2s;
-}
-.fab:active { transform: scale(0.92); }
-.fab svg { width: 24px; height: 24px; }
-
-/* ============================================================
-   BOTTOM TAB BAR
-   ============================================================ */
-.tab-bar {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-  background: var(--paper-2);
-  border-top: 1px solid var(--line);
-  padding: 6px 6px calc(6px + var(--safe-bottom));
-  display: grid; grid-template-columns: repeat(6, 1fr);
-  gap: 2px;
-}
-.tab-btn {
-  background: none; border: none; cursor: pointer;
-  padding: 8px 4px;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  color: var(--ink-3); transition: color .2s;
-  font-family: inherit;
-}
-.tab-btn svg { width: 22px; height: 22px; }
-.tab-btn .tab-label {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
-}
-.tab-btn.active { color: var(--brand-deep); }
-.tab-btn.active svg { stroke-width: 2.4; }
-.tab-btn:active { transform: scale(0.94); }
-
-/* ============================================================
-   MODAL / SHEET
-   ============================================================ */
-.modal-overlay {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(15,23,42,.55);
-  backdrop-filter: blur(4px);
-  display: none;
-  animation: fadeIn .25s;
-}
-.modal-overlay.open { display: block; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.sheet {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: var(--paper);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  max-height: 92dvh; overflow-y: auto;
-  padding-bottom: calc(20px + var(--safe-bottom));
-  animation: sheetUp .35s cubic-bezier(.2,.7,.3,1);
-  box-shadow: 0 -10px 30px rgba(0,0,0,.18);
-}
-@keyframes sheetUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-.sheet-handle {
-  width: 38px; height: 4px;
-  background: var(--line);
-  border-radius: 4px;
-  margin: 8px auto 0;
-}
-.sheet-header {
-  padding: 14px 20px 10px;
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: var(--paper); z-index: 2;
-}
-.sheet-title {
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 18px; letter-spacing: -0.01em;
-}
-.sheet-close {
-  width: 32px; height: 32px; border-radius: 50%; border: none;
-  background: var(--line-2); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--ink-2);
-}
-.sheet-body { padding: 18px 20px; }
-
-/* ---------- Student Detail Sheet ---------- */
-.detail-hero {
-  display: flex; gap: 14px; align-items: center;
-  padding-bottom: 18px; border-bottom: 1px solid var(--line);
-  margin-bottom: 16px;
-}
-.detail-hero .avatar {
-  width: 64px; height: 64px; border-radius: 50%;
-  font-size: 24px; font-weight: 600;
-  font-family: 'Fraunces', serif;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.detail-hero .name-en {
-  font-family: 'Fraunces', serif; font-weight: 700;
-  font-size: 22px; letter-spacing: -0.02em;
-  color: var(--ink);
-}
-.detail-hero .name-mm {
-  font-size: 14px; color: var(--ink-3); margin-top: 2px;
-}
-.detail-hero .meta-tags {
-  display: flex; gap: 6px; margin-top: 8px;
-  flex-wrap: wrap;
-}
-.detail-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  margin-bottom: 16px;
-}
-.detail-item {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 12px;
-}
-.detail-item .label {
-  font-size: 10.5px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--ink-3); margin-bottom: 4px;
-}
-.detail-item .value {
-  font-size: 14px; font-weight: 500; color: var(--ink);
-  word-break: break-word;
-}
-.detail-item.full { grid-column: span 2; }
-
-.action-row {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  margin-top: 16px;
-}
-.action-btn {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 12px;
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  font-family: inherit; font-size: 12.5px; font-weight: 600;
-  color: var(--ink); cursor: pointer; transition: all .2s;
-}
-.action-btn:active { transform: scale(0.97); }
-.action-btn svg { width: 22px; height: 22px; color: var(--brand-deep); }
-.action-btn.primary {
-  background: var(--ink); color: #fff; border-color: var(--ink);
-}
-.action-btn.primary svg { color: #fff; }
-
-/* ============================================================
-   FORM ELEMENTS
-   ============================================================ */
-.form-group { margin-bottom: 14px; }
-.form-label {
-  display: block; font-size: 12px; font-weight: 600;
-  color: var(--ink-2); margin-bottom: 6px;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
-.form-label .req { color: var(--red); }
-.form-input, .form-select, .form-textarea {
-  width: 100%; padding: 11px 14px;
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); font-size: 14.5px;
-  color: var(--ink); font-family: inherit;
-  outline: none; transition: all .2s;
-}
-.form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft);
-}
-.form-textarea { resize: vertical; min-height: 80px; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-.btn-primary {
-  width: 100%; padding: 14px;
-  background: var(--ink); color: #fff;
-  border: none; border-radius: var(--r-md);
-  font-family: inherit; font-size: 15px; font-weight: 600;
-  cursor: pointer; transition: all .2s;
-  letter-spacing: -0.01em;
-}
-.btn-primary:active { transform: scale(0.98); background: #1F2937; }
-.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-
-.btn-secondary {
-  width: 100%; padding: 12px;
-  background: transparent; color: var(--ink-2);
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  font-family: inherit; font-size: 14px; font-weight: 500;
-  cursor: pointer; transition: all .2s;
-}
-
-/* Segmented Control */
-.segmented {
-  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-  gap: 0; padding: 3px;
-  background: var(--line-2); border-radius: var(--r-md);
-}
-.segmented-btn {
-  background: none; border: none; cursor: pointer;
-  padding: 9px 6px; border-radius: 9px;
-  font-family: inherit; font-size: 13px; font-weight: 600;
-  color: var(--ink-3); transition: all .2s;
-}
-.segmented-btn.active {
-  background: var(--paper-2); color: var(--ink);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Toast */
-.toast {
-  position: fixed; bottom: calc(140px + var(--safe-bottom));
-  left: 50%; transform: translateX(-50%);
-  background: var(--ink); color: #fff;
-  padding: 12px 18px; border-radius: 100px;
-  font-size: 13px; font-weight: 500;
-  box-shadow: var(--shadow-lg); z-index: 200;
-  opacity: 0; pointer-events: none;
-  transition: opacity .25s, transform .25s;
-}
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.success { background: var(--green); }
-.toast.error { background: var(--red); }
-
-/* Loading */
-.loading {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; padding: 60px 20px;
-  color: var(--ink-3); gap: 12px;
-}
-.spinner {
-  width: 28px; height: 28px;
-  border: 2.5px solid var(--line);
-  border-top-color: var(--brand);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Skeleton */
-.skel {
-  background: linear-gradient(90deg, var(--line-2), #F8FAFC, var(--line-2));
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: 8px;
-}
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-.skel-card {
-  display: flex; gap: 12px; align-items: center;
-  padding: 12px; background: var(--paper-2);
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  margin-bottom: 8px;
-}
-.skel-circle { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; }
-.skel-line { height: 12px; }
-
-/* ============================================================
-   ATTENDANCE SPECIFIC
-   ============================================================ */
-.attend-grid {
-  display: flex; flex-direction: column; gap: 6px;
-}
-.attend-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md);
-}
-.attend-row .avatar { width: 36px; height: 36px; font-size: 14px; }
-.attend-row .info { flex: 1; min-width: 0; }
-.attend-row .info .name {
-  font-size: 13.5px; font-weight: 600; color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.attend-row .info .class {
-  font-size: 11px; color: var(--ink-3); margin-top: 1px;
-}
-.status-pills {
-  display: flex; gap: 4px; flex-shrink: 0;
-}
-.pill {
-  width: 36px; height: 36px; border-radius: 10px;
-  border: 1.5px solid var(--line);
-  background: var(--paper-2); color: var(--ink-3);
-  font-weight: 700; font-size: 13px;
-  cursor: pointer; transition: all .15s;
-  display: flex; align-items: center; justify-content: center;
-  font-family: inherit;
-}
-.pill:active { transform: scale(0.92); }
-.pill.active { color: #fff; }
-.pill[data-status="P"].active { background: var(--green); border-color: var(--green); }
-.pill[data-status="A"].active { background: var(--red); border-color: var(--red); }
-.pill[data-status="L"].active { background: var(--blue); border-color: var(--blue); }
-.pill[data-status="T"].active { background: var(--brand); border-color: var(--brand); }
-
-/* Date selector */
-.date-strip {
-  display: flex; gap: 6px; overflow-x: auto;
-  margin: 0 -18px 14px; padding: 0 18px 6px;
-  scrollbar-width: none;
-}
-.date-strip::-webkit-scrollbar { display: none; }
-.date-cell {
-  flex-shrink: 0; min-width: 50px;
-  padding: 8px 10px;
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  text-align: center; cursor: pointer;
-  transition: all .15s;
-}
-.date-cell:active { transform: scale(0.94); }
-.date-cell .dow {
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--ink-3);
-}
-.date-cell .day {
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 18px; color: var(--ink); line-height: 1.2;
-  margin-top: 2px;
-}
-.date-cell.today { border-color: var(--brand); }
-.date-cell.today .day { color: var(--brand-deep); }
-.date-cell.selected {
-  background: var(--ink); border-color: var(--ink);
-}
-.date-cell.selected .dow, .date-cell.selected .day { color: #fff; }
-
-/* ============================================================
-   TIMETABLE
-   ============================================================ */
-.timetable-day-tabs {
-  display: flex; gap: 4px; overflow-x: auto;
-  margin: 0 -18px 14px; padding: 0 18px 4px;
-  scrollbar-width: none;
-}
-.timetable-day-tabs::-webkit-scrollbar { display: none; }
-.day-tab {
-  flex-shrink: 0; padding: 8px 14px;
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: 100px; font-size: 12.5px; font-weight: 600;
-  color: var(--ink-2); cursor: pointer;
-  transition: all .2s;
-}
-.day-tab.active {
-  background: var(--ink); color: #fff; border-color: var(--ink);
-}
-.period-card {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 14px;
-  display: flex; gap: 12px; align-items: flex-start;
-  margin-bottom: 8px; position: relative;
-}
-.period-card .time {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11.5px; font-weight: 500;
-  color: var(--ink-3); flex-shrink: 0;
-  width: 60px; line-height: 1.3;
-}
-.period-card .time .start { color: var(--ink); font-weight: 600; }
-.period-card .info { flex: 1; min-width: 0; }
-.period-card .subject {
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 16px; color: var(--ink); letter-spacing: -0.01em;
-}
-.period-card .meta {
-  font-size: 12px; color: var(--ink-3); margin-top: 2px;
-  display: flex; gap: 10px;
-}
-.period-card .badge-num {
-  background: var(--brand-soft); color: var(--brand-deep);
-  width: 26px; height: 26px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 12px; flex-shrink: 0;
-}
-
-/* ============================================================
-   HOMEWORK & DAILY REPORT
-   ============================================================ */
-.entry-card {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 14px;
-  margin-bottom: 8px;
-}
-.entry-card .entry-meta {
-  display: flex; align-items: center; gap: 8px;
-  margin-bottom: 8px;
-}
-.entry-card .entry-date {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; color: var(--ink-3);
-}
-.entry-card .entry-title {
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 15px; color: var(--ink); letter-spacing: -0.01em;
-  margin-bottom: 4px;
-}
-.entry-card .entry-text {
-  font-size: 13px; color: var(--ink-2);
-  line-height: 1.5;
-}
-.entry-card .entry-footer {
-  display: flex; gap: 10px; margin-top: 10px;
-  padding-top: 10px; border-top: 1px solid var(--line-2);
-  font-size: 11.5px; color: var(--ink-3);
-}
-
-/* Mood emojis */
-.mood-pick {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
-}
-.mood-btn {
-  background: var(--paper-2); border: 1.5px solid var(--line);
-  border-radius: var(--r-md); padding: 12px 6px;
-  cursor: pointer; transition: all .2s;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  font-family: inherit;
-}
-.mood-btn .emoji { font-size: 24px; }
-.mood-btn .label { font-size: 10.5px; font-weight: 600; color: var(--ink-3); }
-.mood-btn.active { border-color: var(--brand); background: var(--brand-soft); }
-.mood-btn.active .label { color: var(--brand-deep); }
-
-/* ============================================================
-   MONTHLY SUMMARY
-   ============================================================ */
-.summary-card {
-  background: var(--paper-2); border: 1px solid var(--line);
-  border-radius: var(--r-md); padding: 14px;
-  margin-bottom: 8px;
-}
-.summary-card .student-row {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 12px;
-}
-.summary-card .student-row .name {
-  font-weight: 600; font-size: 14px;
-}
-.summary-stats {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
-}
-.summary-stats .item {
-  text-align: center;
-  background: var(--line-2); border-radius: var(--r-sm);
-  padding: 8px 4px;
-}
-.summary-stats .item .num {
-  font-family: 'Fraunces', serif; font-weight: 600;
-  font-size: 16px; color: var(--ink);
-}
-.summary-stats .item .lbl {
-  font-size: 9.5px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--ink-3); margin-top: 2px;
-}
-.attendance-bar {
-  height: 6px; background: var(--line-2); border-radius: 3px;
-  overflow: hidden; margin-top: 10px;
-}
-.attendance-bar .fill {
-  height: 100%; background: linear-gradient(90deg, var(--green), #34D399);
-  border-radius: 3px;
-  transition: width .8s cubic-bezier(.2,.7,.3,1);
-}
-.attendance-bar .fill.warn { background: linear-gradient(90deg, var(--brand), #FBBF24); }
-.attendance-bar .fill.bad { background: linear-gradient(90deg, var(--red), #F87171); }
-
-/* ============================================================
-   OFFLINE INDICATOR
-   ============================================================ */
-.offline-banner {
-  display: none;
-  background: var(--ink); color: #fff;
-  padding: 8px 16px; font-size: 12px; font-weight: 500;
-  text-align: center;
-}
-body.offline .offline-banner { display: block; }
-
-/* ============================================================
-   UTIL
-   ============================================================ */
-.hidden { display: none !important; }
-.text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.no-scroll { overflow: hidden; }
-</style>
+  <!-- App stylesheet -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="app">
-  <!-- Offline -->
-  <div class="offline-banner">📡 Offline mode — Changes will sync when reconnected</div>
 
-  <!-- Header -->
+  <!-- ===== OFFLINE BANNER ===== -->
+  <div class="offline-banner">📡 Offline — Changes will sync when reconnected</div>
+
+  <!-- ===== FIRST-RUN SETUP OVERLAY ===== -->
+  <div class="setup-overlay" id="setupOverlay">
+    <h2>One-time <em>setup</em></h2>
+    <p>Paste your Supabase project URL, anon key, and the n8n webhook URL. Values are stored locally on this device only. Get keys from Supabase → Project Settings → API.</p>
+
+    <div class="form-group">
+      <label class="form-label">Supabase URL</label>
+      <input class="form-input" id="setupUrl" placeholder="https://xxxxx.supabase.co">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Supabase Anon Key</label>
+      <input class="form-input" id="setupKey" placeholder="eyJhbGciOiJI...">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">n8n Webhook URL (for writes)</label>
+      <input class="form-input" id="setupWebhook" placeholder="https://your-n8n.com/webhook/scms-twa">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">School ID</label>
+      <input class="form-input" id="setupSchool" value="SCH001" placeholder="SCH001">
+    </div>
+
+    <button class="btn-primary" id="setupSaveBtn">Save & Continue</button>
+    <button class="btn-secondary" id="setupDemoBtn" style="margin-top:8px">Try demo mode (no backend)</button>
+  </div>
+
+  <!-- ===== HEADER ===== -->
   <header class="app-header" id="appHeader">
     <div class="header-row">
       <div class="school-info">
@@ -864,71 +64,75 @@ body.offline .offline-banner { display: block; }
         <div class="school-meta">
           <span id="userRole" class="role-badge">AT</span>
           <span class="dot"></span>
-          <span id="userName">Loading...</span>
+          <span id="userName">Loading…</span>
+          <span class="dot"></span>
+          <span class="conn-dot" id="connDot" title="Connection status"></span>
         </div>
       </div>
       <div class="header-actions">
+        <button class="icon-btn" id="btnSettings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
         <button class="icon-btn" id="btnRefresh" aria-label="Refresh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
             <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-            <path d="M21 3v5h-5"/><path d="M3 21v-5h5"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M3 21v-5h5"/>
           </svg>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Pages -->
+  <!-- ===== PAGES ===== -->
   <main id="pages">
-    <!-- STUDENTS PAGE -->
+
+    <!-- STUDENTS -->
     <section class="page active" id="page-students">
       <div class="page-header">
         <div class="page-eyebrow">Roster</div>
         <h1 class="page-title">My <em>students</em></h1>
-        <p class="page-subtitle" id="studentsSubtitle">Loading classroom data…</p>
+        <p class="page-subtitle" id="studentsSubtitle">Loading…</p>
       </div>
-
       <div class="stats-grid" id="studentStats"></div>
-
       <div class="search-bar" id="studentSearch">
         <span class="search-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.3-4.3"/>
           </svg>
         </span>
         <input type="text" id="studentSearchInput" placeholder="Search by name, ID, or class…">
         <button class="clear-btn" id="studentSearchClear">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
         </button>
       </div>
-
       <div class="chips-row" id="classChips"></div>
-
       <div id="studentList"></div>
     </section>
 
-    <!-- ATTENDANCE PAGE -->
+    <!-- ATTENDANCE -->
     <section class="page" id="page-attend">
       <div class="page-header">
         <div class="page-eyebrow">Daily check-in</div>
         <h1 class="page-title"><em>Attendance</em></h1>
         <p class="page-subtitle" id="attendSubtitle">Mark today's attendance for your class.</p>
       </div>
-
       <div class="date-strip" id="dateStrip"></div>
-
       <div class="chips-row" id="attendClassChips"></div>
-
       <div class="stats-grid" id="attendStats"></div>
-
       <div class="attend-grid" id="attendList"></div>
-
-      <div style="height: 12px;"></div>
+      <div style="height:12px;"></div>
       <button class="btn-primary" id="btnSaveAttendance">Save Attendance</button>
     </section>
 
-    <!-- DAILY REPORT PAGE -->
+    <!-- DAILY REPORTS -->
     <section class="page" id="page-daily">
       <div class="page-header">
         <div class="page-eyebrow">For parents</div>
@@ -939,7 +143,7 @@ body.offline .offline-banner { display: block; }
       <div id="dailyList"></div>
     </section>
 
-    <!-- HOMEWORK PAGE -->
+    <!-- HOMEWORK -->
     <section class="page" id="page-hw">
       <div class="page-header">
         <div class="page-eyebrow">Assignments</div>
@@ -950,7 +154,7 @@ body.offline .offline-banner { display: block; }
       <div id="hwList"></div>
     </section>
 
-    <!-- PARENT COMMS PAGE -->
+    <!-- PARENT COMMS -->
     <section class="page" id="page-parents">
       <div class="page-header">
         <div class="page-eyebrow">Communication</div>
@@ -961,7 +165,7 @@ body.offline .offline-banner { display: block; }
       <div id="commsList"></div>
     </section>
 
-    <!-- INCIDENTS PAGE -->
+    <!-- INCIDENTS -->
     <section class="page" id="page-incidents">
       <div class="page-header">
         <div class="page-eyebrow">Records</div>
@@ -972,7 +176,7 @@ body.offline .offline-banner { display: block; }
       <div id="incidentList"></div>
     </section>
 
-    <!-- TIMETABLE PAGE -->
+    <!-- TIMETABLE -->
     <section class="page" id="page-timetable">
       <div class="page-header">
         <div class="page-eyebrow">Schedule</div>
@@ -984,7 +188,7 @@ body.offline .offline-banner { display: block; }
       <div id="timetableList"></div>
     </section>
 
-    <!-- MONTHLY SUMMARY PAGE -->
+    <!-- MONTHLY SUMMARY -->
     <section class="page" id="page-summary">
       <div class="page-header">
         <div class="page-eyebrow">Analytics</div>
@@ -995,7 +199,7 @@ body.offline .offline-banner { display: block; }
       <div id="summaryList"></div>
     </section>
 
-    <!-- MORE/MENU PAGE -->
+    <!-- MORE -->
     <section class="page" id="page-more">
       <div class="page-header">
         <div class="page-eyebrow">Tools</div>
@@ -1003,16 +207,17 @@ body.offline .offline-banner { display: block; }
       </div>
       <div id="moreMenu"></div>
     </section>
+
   </main>
 
-  <!-- FAB -->
+  <!-- ===== FLOATING ACTION BUTTON ===== -->
   <button class="fab" id="fab" aria-label="Add new">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 5v14M5 12h14"/>
     </svg>
   </button>
 
-  <!-- Bottom Tabs -->
+  <!-- ===== BOTTOM TAB BAR ===== -->
   <nav class="tab-bar" id="tabBar">
     <button class="tab-btn active" data-page="students">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1023,6 +228,7 @@ body.offline .offline-banner { display: block; }
       </svg>
       <span class="tab-label">Students</span>
     </button>
+
     <button class="tab-btn" data-page="attend">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 11l3 3L22 4"/>
@@ -1030,6 +236,7 @@ body.offline .offline-banner { display: block; }
       </svg>
       <span class="tab-label">Attend</span>
     </button>
+
     <button class="tab-btn" data-page="daily">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -1039,6 +246,7 @@ body.offline .offline-banner { display: block; }
       </svg>
       <span class="tab-label">Daily</span>
     </button>
+
     <button class="tab-btn" data-page="hw">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -1046,1432 +254,50 @@ body.offline .offline-banner { display: block; }
       </svg>
       <span class="tab-label">HW</span>
     </button>
-    <button class="tab-btn" data-page="parents">
+
+    <button class="tab-btn" data-page="timetable">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
-      <span class="tab-label">Parents</span>
+      <span class="tab-label">Schedule</span>
     </button>
+
     <button class="tab-btn" data-page="more">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+        <circle cx="12" cy="12" r="1"/>
+        <circle cx="19" cy="12" r="1"/>
+        <circle cx="5" cy="12" r="1"/>
       </svg>
       <span class="tab-label">More</span>
     </button>
   </nav>
 
-  <!-- Modal Overlay -->
+  <!-- ===== MODAL OVERLAY (for bottom sheets) ===== -->
   <div class="modal-overlay" id="modalOverlay"></div>
 
-  <!-- Toast -->
+  <!-- ===== TOAST ===== -->
   <div class="toast" id="toast"></div>
+
 </div>
 
-<script>
-/* ============================================================
-   SCMS Mini App — Application Logic
-   ============================================================ */
+<!-- ===== APPLICATION SCRIPTS (load in order) ===== -->
+<script src="js/01_config.js"></script>
+<script src="js/02_api.js"></script>
+<script src="js/03_utils.js"></script>
+<script src="js/04_students.js"></script>
+<script src="js/05_attendance.js"></script>
+<script src="js/06_daily.js"></script>
+<script src="js/07_homework.js"></script>
+<script src="js/08_comms.js"></script>
+<script src="js/09_incidents.js"></script>
+<script src="js/10_timetable.js"></script>
+<script src="js/11_summary.js"></script>
+<script src="js/12_more.js"></script>
+<script src="js/13_register.js"></script>
+<script src="js/14_app.js"></script>
 
-// ============================================================
-// CONFIG — set this to your n8n webhook
-// ============================================================
-const CONFIG = {
-  // Replace with your n8n webhook URL (production)
-  API_URL: window.SCMS_API_URL || '',
-  // Demo mode loads bundled sample data when no API
-  DEMO_MODE: true,
-  // Cache TTL (ms)
-  CACHE_TTL: 5 * 60 * 1000,
-  VERSION: '1.0.0'
-};
-
-// ============================================================
-// TELEGRAM SDK
-// ============================================================
-const tg = window.Telegram?.WebApp;
-if (tg) {
-  tg.ready();
-  tg.expand();
-  tg.enableClosingConfirmation();
-  // Apply theme
-  document.documentElement.style.setProperty('--tg-bg', tg.themeParams.bg_color || '#FAFAF7');
-}
-
-function haptic(type = 'light') {
-  try {
-    if (tg?.HapticFeedback) {
-      if (['success','warning','error'].includes(type)) tg.HapticFeedback.notificationOccurred(type);
-      else if (type === 'selection') tg.HapticFeedback.selectionChanged();
-      else tg.HapticFeedback.impactOccurred(type);
-    }
-  } catch(e) {}
-}
-
-// ============================================================
-// STATE
-// ============================================================
-const State = {
-  user: { id: null, name: '', role: 'AT', school: 'Example International School' },
-  students: [],
-  attendance: [],
-  dailyReports: [],
-  homework: [],
-  parentComms: [],
-  incidents: [],
-  timetable: [],
-  monthlySummary: [],
-  schoolConfig: {},
-
-  filters: {
-    students: { class: 'ALL', search: '' },
-    attendDate: new Date().toISOString().slice(0,10),
-    attendClass: null,
-    attendDraft: {}, // {studentId: 'P'|'A'|'L'|'T'}
-    daily: { class: 'ALL' },
-    homework: { class: 'ALL' },
-    comms: { type: 'ALL' },
-    incidents: { type: 'ALL' },
-    timetable: { day: getToday(), class: 'ALL' },
-    summary: { class: 'ALL' }
-  },
-
-  currentPage: 'students',
-  loading: false
-};
-
-function getToday() {
-  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
-}
-
-// ============================================================
-// DEMO DATA — matches sheet schema exactly
-// ============================================================
-const DEMO_DATA = {
-  students: [
-    {Student_ID:'A1', Name_MM:'Aung Chan Nyein', Name_EN:'Adam', Class:'P4 Online', Grade:'P4', House_Color:'🔵 Blue', Gender:'M', Date_of_Birth:'2015-06-12', Enrollment_Date:'2025-06-01', Parent_Name:'U Aung Thu', Parent_Phone:'09400541xxx', Parent_Phone2:'09450026xxx', Parent_Email:'', Status:'Active'},
-    {Student_ID:'E1', Name_MM:'Eaint Twal Tar Khin', Name_EN:'Ruby', Class:'P4 Online', Grade:'P4', House_Color:'🟡 Yellow', Gender:'F', Date_of_Birth:'2015-03-22', Enrollment_Date:'2025-06-01', Parent_Name:'Daw Khin May', Parent_Phone:'095409xxx', Status:'Active'},
-    {Student_ID:'H6', Name_MM:'Hannah Chit', Name_EN:'Hannah', Class:'P4 Online', Grade:'P4', House_Color:'🟡 Yellow', Gender:'F', Date_of_Birth:'2015-09-05', Enrollment_Date:'2025-06-01', Parent_Name:'U Chit Ko', Parent_Phone:'094445xxx', Status:'Active'},
-    {Student_ID:'H7', Name_MM:'Hein Zayar Htet', Name_EN:'Sid', Class:'P4 Online', Grade:'P4', House_Color:'🟢 Green', Gender:'M', Date_of_Birth:'2015-11-18', Enrollment_Date:'2025-06-01', Parent_Name:'Daw Aye Myat', Parent_Phone:'097876xxx', Status:'Active'},
-    {Student_ID:'H8', Name_MM:'Hsu Htoo Zayar', Name_EN:'Laura', Class:'P4 Online', Grade:'P4', House_Color:'🟢 Green', Gender:'F', Date_of_Birth:'2015-07-30', Enrollment_Date:'2025-06-01', Parent_Name:'U Htoo Zayar', Parent_Phone:'099724xxx', Status:'Active'},
-    {Student_ID:'H9', Name_MM:'Hsu Manaw Phyu', Name_EN:'Heather', Class:'P4 Online', Grade:'P4', House_Color:'🔵 Blue', Gender:'F', Date_of_Birth:'2015-04-14', Enrollment_Date:'2025-06-01', Parent_Name:'Daw Manaw', Parent_Phone:'097999xxx', Status:'Active'},
-    {Student_ID:'S1778060448501', Name_MM:'မောင်မောင်', Name_EN:'mg mg', Class:'Grade2', Grade:'GRADE2', House_Color:'🔴 Red', Gender:'M', Date_of_Birth:'2013-05-01', Enrollment_Date:'2026-05-06', Parent_Name:'U khant', Parent_Phone:'094654xxx', Status:'Active'},
-    {Student_ID:'S1778063486996208', Name_MM:'မောင်သန့်စင်', Name_EN:'mg thant zin', Class:'Grade2', Grade:'GRADE2', House_Color:'🔴 Red', Gender:'M', Date_of_Birth:'2021-08-08', Enrollment_Date:'2026-05-06', Parent_Name:'u zaw', Parent_Phone:'096544xxx', Status:'Active'},
-    {Student_ID:'S1778064073895926', Name_MM:'sai sai', Name_EN:'sai sai', Class:'C1', Grade:'C1', House_Color:'🔴 Red', Gender:'M', Date_of_Birth:'2009-05-06', Enrollment_Date:'2026-05-06', Parent_Name:'sai sai', Parent_Phone:'095979xxx', Status:'Active'},
-    {Student_ID:'S1778064835777963', Name_MM:'မောင်သန့်စင်hhrh', Name_EN:'mg thant zinerrr', Class:'Grade2', Grade:'GRADE2', House_Color:'🔴 Red', Gender:'M', Date_of_Birth:'2015-03-05', Enrollment_Date:'2026-05-06', Parent_Name:'htrje', Status:'Active'},
-    {Student_ID:'S1778066917984667', Name_MM:'faf', Name_EN:'ghsd', Class:'p1', Grade:'P1', House_Color:'🔴 Red', Gender:'M', Date_of_Birth:'2015-11-04', Enrollment_Date:'2026-05-06', Parent_Name:'hwhw', Status:'Active'}
-  ],
-  attendance: [
-    {Date:'2025-12-01', Student_ID:'A1', Name_EN:'Adam', Class:'P4 Online', Status:'P', Teacher_ID:'T001'},
-    {Date:'2025-12-01', Student_ID:'E1', Name_EN:'Ruby', Class:'P4 Online', Status:'P', Teacher_ID:'T001'},
-    {Date:'2025-12-01', Student_ID:'H6', Name_EN:'Hannah', Class:'P4 Online', Status:'A', Teacher_ID:'T001', Note:'Sick'}
-  ],
-  dailyReports: [
-    {Date:'2025-12-01', Student_ID:'A1', Name_EN:'Adam', Class:'P4 Online', Meal:'Good', Nap_Min:45, Mood:'Happy', Behaviour_Note:'Excellent participation in class', Teacher_ID:'T001'},
-    {Date:'2025-12-01', Student_ID:'E1', Name_EN:'Ruby', Class:'P4 Online', Meal:'OK', Nap_Min:30, Mood:'Active', Behaviour_Note:'Worked well in groups', Teacher_ID:'T001'}
-  ],
-  homework: [
-    {Date:'2025-12-01', Class:'P4 Online', Subject:'Maths', Type:'Homework', LB_Page:'12', WB_Page:'8', Description:'Addition and subtraction word problems', Due_Date:'2025-12-03', Teacher_ID:'T001'},
-    {Date:'2025-12-01', Class:'P4 Online', Subject:'Primary English', Type:'Lesson', LB_Page:'15', WB_Page:'10', Description:'Phonics: short vowel sounds', Teacher_ID:'T001'},
-    {Date:'2025-12-02', Class:'Grade2', Subject:'Science', Type:'Homework', Description:'Plant lifecycle drawing', Due_Date:'2025-12-04', Teacher_ID:'T001'}
-  ],
-  parentComms: [
-    {Timestamp:'2025-12-01 08:10:00', Date:'2025-12-01', Student_ID:'H6', Name_EN:'Hannah', Type:'Absent Alert', Message_Preview:'Hannah did not come to school today. Hope she gets well soon.', Status:'Sent', Teacher_ID:'T001'},
-    {Timestamp:'2025-12-01 16:00:00', Date:'2025-12-01', Student_ID:'A1', Name_EN:'Adam', Type:'Daily Report', Message_Preview:'Dear Parent, Adam had a wonderful day today. Excellent participation...', Status:'Sent', Teacher_ID:'T001'}
-  ],
-  incidents: [
-    {Timestamp:'2025-12-01 09:30:00', Date:'2025-12-01', Student_ID:'H7', Name_EN:'Sid', Class:'P4 Online', Type:'Good Behaviour', Severity:'Info', Description:'Helped classmate with activity', Teacher_ID:'T001'},
-    {Timestamp:'2025-12-01 10:15:00', Date:'2025-12-01', Student_ID:'A1', Name_EN:'Adam', Class:'P4 Online', Type:'Participation', Severity:'Info', Description:'Excellent answer during class discussion', Teacher_ID:'T001'}
-  ],
-  timetable: [
-    {Class:'P4 Online', Day:'Monday', Period:1, Start_Time:'08:00', End_Time:'09:00', Subject:'Maths', Teacher_ID:'T001', Room:'Online'},
-    {Class:'P4 Online', Day:'Monday', Period:2, Start_Time:'09:00', End_Time:'10:00', Subject:'Primary English', Teacher_ID:'T001', Room:'Online'},
-    {Class:'P4 Online', Day:'Monday', Period:3, Start_Time:'10:30', End_Time:'11:30', Subject:'Science', Teacher_ID:'T001', Room:'Online'},
-    {Class:'P4 Online', Day:'Tuesday', Period:1, Start_Time:'08:00', End_Time:'09:00', Subject:'Social Studies', Teacher_ID:'T001', Room:'Online'},
-    {Class:'P4 Online', Day:'Tuesday', Period:2, Start_Time:'09:00', End_Time:'10:00', Subject:'Maths', Teacher_ID:'T001', Room:'Online'},
-    {Class:'Grade2', Day:'Monday', Period:1, Start_Time:'08:00', End_Time:'08:45', Subject:'English', Teacher_ID:'T001', Room:'Room 2A'},
-    {Class:'Grade2', Day:'Monday', Period:2, Start_Time:'08:45', End_Time:'09:30', Subject:'Maths', Teacher_ID:'T001', Room:'Room 2A'}
-  ],
-  monthlySummary: [
-    {Student_ID:'A1', Name_EN:'Adam', Class:'P4 Online', Total_School_Days:18, Present_Days:17, Leave_Days:1, Absent_Days:0, 'Attendance_%':0.944, Reports_Sent:17, HW_Assigned:24, Incidents:1, Overall_Grade:'A'},
-    {Student_ID:'E1', Name_EN:'Ruby', Class:'P4 Online', Total_School_Days:18, Present_Days:18, Leave_Days:0, Absent_Days:0, 'Attendance_%':1.0, Reports_Sent:18, HW_Assigned:24, Incidents:0, Overall_Grade:'A'},
-    {Student_ID:'H6', Name_EN:'Hannah', Class:'P4 Online', Total_School_Days:18, Present_Days:15, Leave_Days:1, Absent_Days:2, 'Attendance_%':0.833, Reports_Sent:15, HW_Assigned:24, Incidents:0, Overall_Grade:'B+'}
-  ],
-  schoolConfig: {
-    school_name: 'Example International School',
-    school_id: 'SCH001',
-    academic_year: '2025-2026'
-  },
-  user: { id: 'T001', Teacher_Name: 'Ma Aye Myat Thu', Role: 'AT', Classes: 'P4 Online,Grade2,C1,p1' }
-};
-
-// ============================================================
-// API LAYER (n8n webhook)
-// ============================================================
-async function api(action, payload = {}) {
-  if (!CONFIG.API_URL || CONFIG.DEMO_MODE) {
-    // Demo mode: simulate latency
-    await new Promise(r => setTimeout(r, 300));
-    return handleDemoApi(action, payload);
-  }
-  const res = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action, payload,
-      tg_init_data: tg?.initData || '',
-      user_id: State.user.id,
-      version: CONFIG.VERSION
-    })
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
-}
-
-function handleDemoApi(action, payload) {
-  switch(action) {
-    case 'bootstrap':
-      return {
-        ok: true,
-        user: DEMO_DATA.user,
-        students: DEMO_DATA.students,
-        timetable: DEMO_DATA.timetable,
-        schoolConfig: DEMO_DATA.schoolConfig,
-        homework: DEMO_DATA.homework,
-        attendance: DEMO_DATA.attendance,
-        dailyReports: DEMO_DATA.dailyReports,
-        parentComms: DEMO_DATA.parentComms,
-        incidents: DEMO_DATA.incidents,
-        monthlySummary: DEMO_DATA.monthlySummary
-      };
-    case 'save_attendance':
-      return { ok: true, saved: payload.records?.length || 0 };
-    case 'save_daily_report':
-      return { ok: true, id: 'DR' + Date.now() };
-    case 'save_homework':
-      return { ok: true, id: 'HW' + Date.now() };
-    case 'save_incident':
-      return { ok: true, id: 'IC' + Date.now() };
-    case 'send_parent_comm':
-      return { ok: true, id: 'PC' + Date.now(), status: 'Queued' };
-    default:
-      return { ok: false, error: 'Unknown action' };
-  }
-}
-
-// ============================================================
-// CACHE
-// ============================================================
-const Cache = {
-  set(k, v) {
-    try { localStorage.setItem('scms_'+k, JSON.stringify({ t: Date.now(), v })); } catch(e){}
-  },
-  get(k) {
-    try {
-      const raw = localStorage.getItem('scms_'+k);
-      if (!raw) return null;
-      const { t, v } = JSON.parse(raw);
-      if (Date.now() - t > CONFIG.CACHE_TTL) return null;
-      return v;
-    } catch(e) { return null; }
-  }
-};
-
-// ============================================================
-// RENDERING UTILITIES
-// ============================================================
-function $(sel, root = document) { return root.querySelector(sel); }
-function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
-
-function el(tag, attrs = {}, ...children) {
-  const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'class') node.className = v;
-    else if (k === 'html') node.innerHTML = v;
-    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
-    else if (k === 'data') Object.entries(v).forEach(([dk, dv]) => node.dataset[dk] = dv);
-    else if (v != null) node.setAttribute(k, v);
-  }
-  for (const c of children.flat()) {
-    if (c == null || c === false) continue;
-    node.append(c.nodeType ? c : document.createTextNode(c));
-  }
-  return node;
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function initials(name) {
-  if (!name) return '?';
-  const parts = String(name).trim().split(/\s+/);
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
-}
-
-function houseClass(houseColor) {
-  if (!houseColor) return '';
-  const s = String(houseColor).toLowerCase();
-  if (s.includes('blue')) return 'h-blue';
-  if (s.includes('yellow')) return 'h-yellow';
-  if (s.includes('green')) return 'h-green';
-  if (s.includes('red')) return 'h-red';
-  return '';
-}
-
-function formatDate(d) {
-  if (!d) return '';
-  try {
-    const dt = new Date(d);
-    if (isNaN(dt)) return String(d);
-    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch(e) { return String(d); }
-}
-
-function formatTime(t) {
-  if (!t) return '';
-  return String(t).slice(0,5); // HH:MM
-}
-
-function showToast(msg, type = '') {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.className = 'toast ' + type + ' show';
-  clearTimeout(showToast._tid);
-  showToast._tid = setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ============================================================
-// MODAL / SHEET
-// ============================================================
-function openSheet(title, body, opts = {}) {
-  const overlay = $('#modalOverlay');
-  overlay.innerHTML = '';
-  const sheet = el('div', { class: 'sheet' },
-    el('div', { class: 'sheet-handle' }),
-    el('div', { class: 'sheet-header' },
-      el('div', { class: 'sheet-title' }, title),
-      el('button', { class: 'sheet-close', onclick: closeSheet, 'aria-label': 'Close' },
-        Object.assign(document.createElement('span'), { innerHTML: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' })
-      )
-    ),
-    el('div', { class: 'sheet-body' }, body)
-  );
-  overlay.appendChild(sheet);
-  overlay.classList.add('open');
-  document.body.classList.add('no-scroll');
-  haptic('light');
-
-  // Tap outside to close
-  overlay.onclick = (e) => { if (e.target === overlay) closeSheet(); };
-}
-
-function closeSheet() {
-  $('#modalOverlay').classList.remove('open');
-  document.body.classList.remove('no-scroll');
-}
-
-// ============================================================
-// PAGE: STUDENTS
-// ============================================================
-function renderStudents() {
-  const { students } = State;
-  const f = State.filters.students;
-  const subtitle = $('#studentsSubtitle');
-  subtitle.textContent = students.length ? `${students.length} students • Tap any card for details.` : 'No students loaded.';
-
-  // Stats
-  const classes = [...new Set(students.map(s => s.Class).filter(Boolean))];
-  const houses = students.filter(s => s.House_Color).length;
-  $('#studentStats').innerHTML = '';
-  $('#studentStats').append(
-    statCard(students.length, 'Students', true),
-    statCard(classes.length, 'Classes'),
-    statCard(houses, 'Housed')
-  );
-
-  // Class chips (real classes from data!)
-  const chipsRow = $('#classChips');
-  chipsRow.innerHTML = '';
-  const counts = {};
-  students.forEach(s => { counts[s.Class] = (counts[s.Class] || 0) + 1; });
-
-  chipsRow.appendChild(makeChip('ALL', 'All', students.length, f.class === 'ALL', () => {
-    f.class = 'ALL'; renderStudents();
-  }));
-  classes.sort().forEach(cls => {
-    chipsRow.appendChild(makeChip(cls, cls, counts[cls], f.class === cls, () => {
-      f.class = cls; renderStudents();
-    }));
-  });
-
-  // Filter list
-  let filtered = students;
-  if (f.class !== 'ALL') filtered = filtered.filter(s => s.Class === f.class);
-  if (f.search) {
-    const q = f.search.toLowerCase().trim();
-    filtered = filtered.filter(s =>
-      String(s.Name_EN || '').toLowerCase().includes(q) ||
-      String(s.Name_MM || '').toLowerCase().includes(q) ||
-      String(s.Class || '').toLowerCase().includes(q) ||
-      String(s.Student_ID || '').toLowerCase().includes(q)
-    );
-  }
-
-  const list = $('#studentList');
-  list.innerHTML = '';
-
-  if (!filtered.length) {
-    list.appendChild(emptyState('No students found', 'Try a different filter or search term.'));
-    return;
-  }
-
-  // Group by class
-  const grouped = {};
-  filtered.forEach(s => {
-    const k = s.Class || 'Unassigned';
-    (grouped[k] ||= []).push(s);
-  });
-
-  Object.keys(grouped).sort().forEach(cls => {
-    list.appendChild(el('div', { class: 'group-header' },
-      el('div', { class: 'group-title' },
-        el('div', { class: 'swatch' }),
-        cls
-      ),
-      el('div', { class: 'group-count' }, `${grouped[cls].length}`)
-    ));
-    const cardWrap = el('div', { class: 'student-list' });
-    grouped[cls].forEach(s => cardWrap.appendChild(studentCard(s)));
-    list.appendChild(cardWrap);
-  });
-}
-
-function statCard(value, label, accent = false) {
-  return el('div', { class: 'stat-card' + (accent ? ' accent' : '') },
-    el('div', { class: 'stat-value' }, String(value)),
-    el('div', { class: 'stat-label' }, label)
-  );
-}
-
-function makeChip(value, label, count, active, onClick) {
-  const chip = el('button', { class: 'chip' + (active ? ' active' : ''), onclick: () => { haptic('selection'); onClick(); }},
-    el('span', {}, label)
-  );
-  if (count != null) chip.appendChild(el('span', { class: 'chip-count' }, String(count)));
-  return chip;
-}
-
-function studentCard(s) {
-  const card = el('div', { class: 'student-card', onclick: () => openStudentDetail(s) },
-    el('div', { class: 'avatar ' + houseClass(s.House_Color) }, initials(s.Name_EN || s.Name_MM)),
-    el('div', { class: 'info' },
-      el('div', { class: 'name' }, s.Name_EN || s.Name_MM || 'Unnamed'),
-      el('div', { class: 'name-mm' }, s.Name_MM && s.Name_EN ? s.Name_MM : (s.Student_ID || ''))
-    ),
-    el('div', { class: 'badges' },
-      el('span', { class: 'tag' }, s.Class || '—')
-    )
-  );
-  return card;
-}
-
-function emptyState(title, text) {
-  return el('div', { class: 'empty' },
-    el('div', { class: 'empty-icon' }, '📋'),
-    el('div', { class: 'empty-title' }, title),
-    el('div', { class: 'empty-text' }, text)
-  );
-}
-
-// ---- Student Detail Sheet ----
-function openStudentDetail(s) {
-  const body = el('div', {});
-
-  // Hero
-  body.appendChild(el('div', { class: 'detail-hero' },
-    el('div', { class: 'avatar ' + houseClass(s.House_Color) }, initials(s.Name_EN || s.Name_MM)),
-    el('div', { class: 'info' },
-      el('div', { class: 'name-en' }, s.Name_EN || 'Unnamed'),
-      s.Name_MM ? el('div', { class: 'name-mm' }, s.Name_MM) : null,
-      el('div', { class: 'meta-tags' },
-        el('span', { class: 'tag' }, s.Class || '—'),
-        s.Grade ? el('span', { class: 'tag gray' }, s.Grade) : null,
-        s.Gender ? el('span', { class: 'tag gray' }, s.Gender) : null,
-        s.House_Color ? el('span', { class: 'tag gray' }, s.House_Color) : null
-      )
-    )
-  ));
-
-  // Detail grid
-  const grid = el('div', { class: 'detail-grid' });
-  const items = [
-    { label: 'Student ID', value: s.Student_ID, mono: true },
-    { label: 'Date of Birth', value: formatDate(s.Date_of_Birth) },
-    { label: 'Enrolled', value: formatDate(s.Enrollment_Date) },
-    { label: 'Status', value: s.Status || '—' },
-    { label: 'Parent', value: s.Parent_Name, full: true },
-    { label: 'Phone', value: s.Parent_Phone },
-    { label: 'Phone 2', value: s.Parent_Phone2 || '—' },
-    { label: 'Email', value: s.Parent_Email || '—', full: true }
-  ];
-  items.forEach(it => {
-    if (it.value == null || it.value === '') return;
-    const item = el('div', { class: 'detail-item' + (it.full ? ' full' : '') },
-      el('div', { class: 'label' }, it.label),
-      el('div', { class: 'value' + (it.mono ? ' mono' : '') }, String(it.value))
-    );
-    grid.appendChild(item);
-  });
-  body.appendChild(grid);
-
-  // Quick actions
-  body.appendChild(el('div', { class: 'action-row' },
-    actionBtn('Daily Report', icon('clipboard'), () => { closeSheet(); openDailyReportForm(s); }),
-    actionBtn('Mark Attendance', icon('check'), () => { closeSheet(); switchPage('attend'); State.filters.attendClass = s.Class; renderAttendance(); }),
-    actionBtn('Send Parent', icon('msg'), () => { closeSheet(); openParentMessageForm(s); }),
-    actionBtn('Add Incident', icon('alert'), () => { closeSheet(); openIncidentForm(s); })
-  ));
-
-  openSheet(s.Name_EN || 'Student', body);
-}
-
-function actionBtn(label, iconHTML, onclick) {
-  const btn = el('button', { class: 'action-btn', onclick });
-  btn.innerHTML = iconHTML;
-  btn.appendChild(el('span', {}, label));
-  return btn;
-}
-
-function icon(name) {
-  const icons = {
-    clipboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>',
-    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
-    msg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
-    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>'
-  };
-  return icons[name] || '';
-}
-
-// ============================================================
-// PAGE: ATTENDANCE
-// ============================================================
-function renderAttendance() {
-  const { students } = State;
-  const f = State.filters;
-
-  // Date strip
-  const strip = $('#dateStrip');
-  strip.innerHTML = '';
-  const today = new Date();
-  for (let i = -3; i <= 3; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    const dateStr = d.toISOString().slice(0,10);
-    const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-    const cell = el('div', {
-      class: 'date-cell' + (i === 0 ? ' today' : '') + (dateStr === f.attendDate ? ' selected' : ''),
-      onclick: () => { haptic('selection'); f.attendDate = dateStr; f.attendDraft = {}; renderAttendance(); }
-    },
-      el('div', { class: 'dow' }, dow),
-      el('div', { class: 'day' }, String(d.getDate()))
-    );
-    strip.appendChild(cell);
-  }
-
-  // Class chips
-  const classes = [...new Set(students.map(s => s.Class).filter(Boolean))].sort();
-  if (!f.attendClass && classes[0]) f.attendClass = classes[0];
-  const chipsRow = $('#attendClassChips');
-  chipsRow.innerHTML = '';
-  classes.forEach(cls => {
-    chipsRow.appendChild(makeChip(cls, cls, students.filter(s => s.Class === cls).length, f.attendClass === cls, () => {
-      f.attendClass = cls; f.attendDraft = {}; renderAttendance();
-    }));
-  });
-
-  const classStudents = students.filter(s => s.Class === f.attendClass);
-
-  // Pre-fill from existing attendance for this date
-  const existing = State.attendance.filter(a => a.Date === f.attendDate);
-  const draftMap = { ...f.attendDraft };
-  existing.forEach(a => { if (!(a.Student_ID in draftMap)) draftMap[a.Student_ID] = a.Status; });
-
-  // Stats
-  const counts = { P:0, A:0, L:0, T:0 };
-  classStudents.forEach(s => {
-    const st = draftMap[s.Student_ID];
-    if (st) counts[st] = (counts[st] || 0) + 1;
-  });
-  const marked = counts.P + counts.A + counts.L + counts.T;
-  $('#attendStats').innerHTML = '';
-  $('#attendStats').append(
-    statCard(`${counts.P}`, 'Present'),
-    statCard(`${counts.A}`, 'Absent'),
-    statCard(`${marked}/${classStudents.length}`, 'Marked', true)
-  );
-
-  $('#attendSubtitle').textContent = `${formatDate(f.attendDate)} • ${f.attendClass || '—'}`;
-
-  // List
-  const list = $('#attendList');
-  list.innerHTML = '';
-  if (!classStudents.length) {
-    list.appendChild(emptyState('No students', 'Pick a different class above.'));
-    return;
-  }
-  classStudents.forEach(s => {
-    const current = draftMap[s.Student_ID] || '';
-    const row = el('div', { class: 'attend-row' },
-      el('div', { class: 'avatar ' + houseClass(s.House_Color) }, initials(s.Name_EN || s.Name_MM)),
-      el('div', { class: 'info' },
-        el('div', { class: 'name' }, s.Name_EN || s.Name_MM || s.Student_ID),
-        el('div', { class: 'class' }, s.Name_MM && s.Name_EN ? s.Name_MM : (s.Student_ID || ''))
-      ),
-      buildPills(s.Student_ID, current, (status) => {
-        f.attendDraft[s.Student_ID] = status;
-        haptic('selection');
-        renderAttendance();
-      })
-    );
-    list.appendChild(row);
-  });
-}
-
-function buildPills(sid, current, onPick) {
-  const wrap = el('div', { class: 'status-pills' });
-  ['P','A','L','T'].forEach(st => {
-    wrap.appendChild(el('button', {
-      class: 'pill' + (current === st ? ' active' : ''),
-      data: { status: st },
-      onclick: () => onPick(st),
-      'aria-label': { P:'Present', A:'Absent', L:'Leave', T:'Tardy' }[st]
-    }, st));
-  });
-  return wrap;
-}
-
-async function saveAttendance() {
-  const f = State.filters;
-  const records = Object.entries(f.attendDraft).map(([sid, status]) => {
-    const s = State.students.find(x => x.Student_ID === sid);
-    return {
-      Date: f.attendDate,
-      Day_of_Week: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(f.attendDate).getDay()],
-      Student_ID: sid,
-      Name_EN: s?.Name_EN || '',
-      Class: s?.Class || f.attendClass,
-      Status: status,
-      Teacher_ID: State.user.id || 'T001',
-      Timestamp: new Date().toISOString()
-    };
-  });
-  if (!records.length) { showToast('Nothing to save', 'error'); haptic('error'); return; }
-  showToast('Saving…');
-  try {
-    const r = await api('save_attendance', { records });
-    if (r.ok) {
-      showToast(`✓ Saved ${records.length} records`, 'success');
-      haptic('success');
-      // Update local state
-      records.forEach(rec => {
-        const idx = State.attendance.findIndex(a => a.Date === rec.Date && a.Student_ID === rec.Student_ID);
-        if (idx >= 0) State.attendance[idx] = rec;
-        else State.attendance.push(rec);
-      });
-      f.attendDraft = {};
-      renderAttendance();
-    } else throw new Error(r.error);
-  } catch(e) {
-    showToast('Save failed', 'error'); haptic('error');
-  }
-}
-
-// ============================================================
-// PAGE: DAILY REPORTS
-// ============================================================
-function renderDaily() {
-  const f = State.filters.daily;
-  const list = $('#dailyList');
-  const reports = State.dailyReports;
-
-  // Class chips
-  const classes = [...new Set(State.students.map(s => s.Class).filter(Boolean))].sort();
-  const chipsRow = $('#dailyClassChips');
-  chipsRow.innerHTML = '';
-  chipsRow.appendChild(makeChip('ALL', 'All', reports.length, f.class === 'ALL', () => {
-    f.class = 'ALL'; renderDaily();
-  }));
-  classes.forEach(cls => {
-    const cnt = reports.filter(r => r.Class === cls).length;
-    chipsRow.appendChild(makeChip(cls, cls, cnt, f.class === cls, () => {
-      f.class = cls; renderDaily();
-    }));
-  });
-
-  let filtered = reports;
-  if (f.class !== 'ALL') filtered = filtered.filter(r => r.Class === f.class);
-
-  list.innerHTML = '';
-  if (!filtered.length) {
-    list.appendChild(emptyState('No reports yet', 'Tap + to write a daily report.'));
-    return;
-  }
-  filtered.sort((a, b) => String(b.Date).localeCompare(String(a.Date))).forEach(r => {
-    list.appendChild(el('div', { class: 'entry-card' },
-      el('div', { class: 'entry-meta' },
-        el('span', { class: 'tag' }, r.Class || '—'),
-        el('span', { class: 'entry-date mono' }, formatDate(r.Date))
-      ),
-      el('div', { class: 'entry-title' }, r.Name_EN || r.Student_ID),
-      r.Behaviour_Note ? el('div', { class: 'entry-text' }, r.Behaviour_Note) : null,
-      el('div', { class: 'entry-footer' },
-        r.Mood ? el('span', {}, '😊 ' + r.Mood) : null,
-        r.Meal ? el('span', {}, '🍽 ' + r.Meal) : null,
-        r.Nap_Min ? el('span', {}, '💤 ' + r.Nap_Min + ' min') : null
-      )
-    ));
-  });
-}
-
-function openDailyReportForm(student = null) {
-  const studentList = State.students;
-  const currentClass = student?.Class || State.filters.daily.class !== 'ALL' ? State.filters.daily.class : (studentList[0]?.Class || '');
-
-  let selectedStudent = student;
-  let selectedMood = '';
-
-  const studentSelect = el('select', { class: 'form-select', id: 'drStudent' });
-  studentList.forEach(s => {
-    const opt = el('option', { value: s.Student_ID }, `${s.Name_EN || s.Name_MM} (${s.Class})`);
-    if (selectedStudent?.Student_ID === s.Student_ID) opt.selected = true;
-    studentSelect.appendChild(opt);
-  });
-
-  const moodPicker = el('div', { class: 'mood-pick' });
-  [['😊','Happy'],['😐','OK'],['😕','Quiet'],['😴','Tired'],['🤩','Excited'],['😢','Upset'],['😤','Frustrated'],['🤒','Unwell']].forEach(([emoji, label]) => {
-    const btn = el('button', { class: 'mood-btn', type: 'button', onclick: () => {
-      selectedMood = label;
-      $$('.mood-btn', moodPicker).forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      haptic('selection');
-    }},
-      el('span', { class: 'emoji' }, emoji),
-      el('span', { class: 'label' }, label)
-    );
-    moodPicker.appendChild(btn);
-  });
-
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Student'),
-      studentSelect
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Mood'),
-      moodPicker
-    ),
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Meal'),
-        Object.assign(el('select', { class: 'form-select', id: 'drMeal' }),
-          { innerHTML: '<option value="">—</option><option>Good</option><option>OK</option><option>Picky</option><option>None</option>' })
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Nap (min)'),
-        el('input', { class: 'form-input', type: 'number', id: 'drNap', placeholder: '0', min: 0 })
-      )
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Note'),
-      el('textarea', { class: 'form-textarea', id: 'drNote', placeholder: 'How did the day go? What did they learn?' })
-    ),
-    el('button', { class: 'btn-primary', onclick: async () => {
-      const sid = studentSelect.value;
-      const s = State.students.find(x => x.Student_ID === sid);
-      const data = {
-        Date: new Date().toISOString().slice(0,10),
-        Student_ID: sid,
-        Name_EN: s?.Name_EN || '',
-        Class: s?.Class || '',
-        Meal: $('#drMeal').value,
-        Nap_Min: parseInt($('#drNap').value) || 0,
-        Mood: selectedMood,
-        Behaviour_Note: $('#drNote').value,
-        Teacher_ID: State.user.id || 'T001',
-        Timestamp: new Date().toISOString()
-      };
-      if (!data.Behaviour_Note && !data.Mood) {
-        showToast('Add at least a note or mood', 'error'); return;
-      }
-      showToast('Saving…');
-      try {
-        const r = await api('save_daily_report', { data });
-        if (r.ok) {
-          showToast('✓ Report saved', 'success'); haptic('success');
-          State.dailyReports.unshift(data);
-          closeSheet(); renderDaily();
-        }
-      } catch(e) { showToast('Save failed', 'error'); }
-    }}, 'Save Report')
-  );
-  openSheet('Daily Report', body);
-}
-
-// ============================================================
-// PAGE: HOMEWORK
-// ============================================================
-function renderHomework() {
-  const f = State.filters.homework;
-  const list = $('#hwList');
-  const items = State.homework;
-
-  const classes = [...new Set(State.students.map(s => s.Class).filter(Boolean))].sort();
-  const chipsRow = $('#hwClassChips');
-  chipsRow.innerHTML = '';
-  chipsRow.appendChild(makeChip('ALL', 'All', items.length, f.class === 'ALL', () => {
-    f.class = 'ALL'; renderHomework();
-  }));
-  classes.forEach(cls => {
-    const cnt = items.filter(r => r.Class === cls).length;
-    chipsRow.appendChild(makeChip(cls, cls, cnt, f.class === cls, () => {
-      f.class = cls; renderHomework();
-    }));
-  });
-
-  let filtered = items;
-  if (f.class !== 'ALL') filtered = filtered.filter(r => r.Class === f.class);
-
-  list.innerHTML = '';
-  if (!filtered.length) {
-    list.appendChild(emptyState('No homework', 'Tap + to assign new homework.'));
-    return;
-  }
-  filtered.sort((a, b) => String(b.Date).localeCompare(String(a.Date))).forEach(r => {
-    list.appendChild(el('div', { class: 'entry-card' },
-      el('div', { class: 'entry-meta' },
-        el('span', { class: 'tag' }, r.Subject || '—'),
-        el('span', { class: 'tag gray' }, r.Type || 'Homework'),
-        el('span', { class: 'entry-date mono' }, formatDate(r.Date))
-      ),
-      el('div', { class: 'entry-title' }, r.Class || ''),
-      r.Description ? el('div', { class: 'entry-text' }, r.Description) : null,
-      el('div', { class: 'entry-footer' },
-        r.LB_Page ? el('span', {}, 'LB p.' + r.LB_Page) : null,
-        r.WB_Page ? el('span', {}, 'WB p.' + r.WB_Page) : null,
-        r.Due_Date ? el('span', {}, 'Due: ' + formatDate(r.Due_Date)) : null
-      )
-    ));
-  });
-}
-
-function openHomeworkForm() {
-  const classes = [...new Set(State.students.map(s => s.Class).filter(Boolean))].sort();
-  const subjects = ['Maths','Primary English','Science','Social Studies','Myanmar','Art','PE','Music'];
-
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Class'),
-      Object.assign(el('select', { class: 'form-select', id: 'hwClass' }),
-        { innerHTML: classes.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('') })
-    ),
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Subject'),
-        Object.assign(el('select', { class: 'form-select', id: 'hwSubject' }),
-          { innerHTML: subjects.map(s => `<option>${s}</option>`).join('') })
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Type'),
-        Object.assign(el('select', { class: 'form-select', id: 'hwType' }),
-          { innerHTML: '<option>Homework</option><option>Lesson</option><option>Project</option><option>Quiz</option>' })
-      )
-    ),
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'LB Page'),
-        el('input', { class: 'form-input', type: 'text', id: 'hwLB', placeholder: 'e.g. 12' })
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'WB Page'),
-        el('input', { class: 'form-input', type: 'text', id: 'hwWB', placeholder: 'e.g. 8' })
-      )
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Description'),
-      el('textarea', { class: 'form-textarea', id: 'hwDesc', placeholder: 'What should students do?' })
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Due Date'),
-      el('input', { class: 'form-input', type: 'date', id: 'hwDue' })
-    ),
-    el('button', { class: 'btn-primary', onclick: async () => {
-      const data = {
-        Date: new Date().toISOString().slice(0,10),
-        Class: $('#hwClass').value,
-        Subject: $('#hwSubject').value,
-        Type: $('#hwType').value,
-        LB_Page: $('#hwLB').value,
-        WB_Page: $('#hwWB').value,
-        Description: $('#hwDesc').value,
-        Due_Date: $('#hwDue').value,
-        Teacher_ID: State.user.id || 'T001'
-      };
-      if (!data.Description) { showToast('Add description', 'error'); return; }
-      showToast('Saving…');
-      try {
-        const r = await api('save_homework', { data });
-        if (r.ok) {
-          showToast('✓ Homework assigned', 'success'); haptic('success');
-          State.homework.unshift(data);
-          closeSheet(); renderHomework();
-        }
-      } catch(e) { showToast('Save failed', 'error'); }
-    }}, 'Assign Homework')
-  );
-  openSheet('New Homework', body);
-}
-
-// ============================================================
-// PAGE: PARENT COMMS
-// ============================================================
-function renderComms() {
-  const f = State.filters.comms;
-  const list = $('#commsList');
-  const items = State.parentComms;
-
-  const types = [...new Set(items.map(r => r.Type).filter(Boolean))];
-  const chipsRow = $('#commsTypeChips');
-  chipsRow.innerHTML = '';
-  chipsRow.appendChild(makeChip('ALL', 'All', items.length, f.type === 'ALL', () => {
-    f.type = 'ALL'; renderComms();
-  }));
-  types.forEach(t => {
-    const cnt = items.filter(r => r.Type === t).length;
-    chipsRow.appendChild(makeChip(t, t, cnt, f.type === t, () => {
-      f.type = t; renderComms();
-    }));
-  });
-
-  let filtered = items;
-  if (f.type !== 'ALL') filtered = filtered.filter(r => r.Type === f.type);
-
-  list.innerHTML = '';
-  if (!filtered.length) {
-    list.appendChild(emptyState('No messages', 'Send messages from any student card.'));
-    return;
-  }
-  filtered.sort((a, b) => String(b.Timestamp).localeCompare(String(a.Timestamp))).forEach(r => {
-    const statusColor = r.Status === 'Sent' ? 'green' : r.Status === 'Failed' ? 'red' : 'gray';
-    list.appendChild(el('div', { class: 'entry-card' },
-      el('div', { class: 'entry-meta' },
-        el('span', { class: 'tag ' + (r.Type === 'Absent Alert' ? 'red' : 'blue') }, r.Type || '—'),
-        el('span', { class: 'tag ' + statusColor }, r.Status || 'Pending'),
-        el('span', { class: 'entry-date mono' }, formatDate(r.Date))
-      ),
-      el('div', { class: 'entry-title' }, r.Name_EN || r.Student_ID),
-      el('div', { class: 'entry-text' }, r.Message_Preview || '')
-    ));
-  });
-}
-
-function openParentMessageForm(student = null) {
-  const studentList = State.students;
-  const studentSelect = el('select', { class: 'form-select', id: 'pmStudent' });
-  studentList.forEach(s => {
-    const opt = el('option', { value: s.Student_ID }, `${s.Name_EN || s.Name_MM} (${s.Class})`);
-    if (student?.Student_ID === s.Student_ID) opt.selected = true;
-    studentSelect.appendChild(opt);
-  });
-
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Student'),
-      studentSelect
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Type'),
-      Object.assign(el('select', { class: 'form-select', id: 'pmType' }),
-        { innerHTML: '<option>General</option><option>Absent Alert</option><option>Daily Report</option><option>Reminder</option><option>Praise</option>' })
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Message'),
-      el('textarea', { class: 'form-textarea', id: 'pmMessage', rows: 5, placeholder: 'Type your message to the parent…' })
-    ),
-    el('button', { class: 'btn-primary', onclick: async () => {
-      const sid = studentSelect.value;
-      const s = State.students.find(x => x.Student_ID === sid);
-      const data = {
-        Timestamp: new Date().toISOString(),
-        Date: new Date().toISOString().slice(0,10),
-        Student_ID: sid,
-        Name_EN: s?.Name_EN || '',
-        Parent_TG_ID: s?.Parent_TG_ID || '',
-        Type: $('#pmType').value,
-        Message_Preview: $('#pmMessage').value,
-        Status: 'Queued',
-        Teacher_ID: State.user.id || 'T001'
-      };
-      if (!data.Message_Preview) { showToast('Empty message', 'error'); return; }
-      showToast('Sending…');
-      try {
-        const r = await api('send_parent_comm', { data });
-        if (r.ok) {
-          data.Status = r.status || 'Sent';
-          showToast('✓ Message sent', 'success'); haptic('success');
-          State.parentComms.unshift(data);
-          closeSheet(); renderComms();
-        }
-      } catch(e) { showToast('Send failed', 'error'); }
-    }}, 'Send Message')
-  );
-  openSheet('Message Parent', body);
-}
-
-// ============================================================
-// PAGE: INCIDENTS
-// ============================================================
-function renderIncidents() {
-  const f = State.filters.incidents;
-  const list = $('#incidentList');
-  const items = State.incidents;
-
-  const types = [...new Set(items.map(r => r.Type).filter(Boolean))];
-  const chipsRow = $('#incidentTypeChips');
-  chipsRow.innerHTML = '';
-  chipsRow.appendChild(makeChip('ALL', 'All', items.length, f.type === 'ALL', () => {
-    f.type = 'ALL'; renderIncidents();
-  }));
-  types.forEach(t => {
-    const cnt = items.filter(r => r.Type === t).length;
-    chipsRow.appendChild(makeChip(t, t, cnt, f.type === t, () => {
-      f.type = t; renderIncidents();
-    }));
-  });
-
-  let filtered = items;
-  if (f.type !== 'ALL') filtered = filtered.filter(r => r.Type === f.type);
-
-  list.innerHTML = '';
-  if (!filtered.length) {
-    list.appendChild(emptyState('No incidents', 'Tap + to record one.'));
-    return;
-  }
-  filtered.sort((a, b) => String(b.Timestamp).localeCompare(String(a.Timestamp))).forEach(r => {
-    const sev = (r.Severity || '').toLowerCase();
-    const sevColor = sev.includes('critical') || sev.includes('high') ? 'red' :
-                     sev.includes('warn') || sev.includes('medium') ? 'gray' : 'green';
-    list.appendChild(el('div', { class: 'entry-card' },
-      el('div', { class: 'entry-meta' },
-        el('span', { class: 'tag ' + sevColor }, r.Type || '—'),
-        r.Severity ? el('span', { class: 'tag gray' }, r.Severity) : null,
-        el('span', { class: 'entry-date mono' }, formatDate(r.Date))
-      ),
-      el('div', { class: 'entry-title' }, (r.Name_EN || r.Student_ID) + ' — ' + (r.Class || '')),
-      r.Description ? el('div', { class: 'entry-text' }, r.Description) : null,
-      r.Action_Taken ? el('div', { class: 'entry-footer' }, el('span', {}, '🛠 ' + r.Action_Taken)) : null
-    ));
-  });
-}
-
-function openIncidentForm(student = null) {
-  const studentList = State.students;
-  const studentSelect = el('select', { class: 'form-select', id: 'icStudent' });
-  studentList.forEach(s => {
-    const opt = el('option', { value: s.Student_ID }, `${s.Name_EN || s.Name_MM} (${s.Class})`);
-    if (student?.Student_ID === s.Student_ID) opt.selected = true;
-    studentSelect.appendChild(opt);
-  });
-
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Student'),
-      studentSelect
-    ),
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Type'),
-        Object.assign(el('select', { class: 'form-select', id: 'icType' }),
-          { innerHTML: '<option>Good Behaviour</option><option>Participation</option><option>Achievement</option><option>Concern</option><option>Conflict</option><option>Health</option><option>Other</option>' })
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Severity'),
-        Object.assign(el('select', { class: 'form-select', id: 'icSev' }),
-          { innerHTML: '<option>Info</option><option>Low</option><option>Medium</option><option>High</option>' })
-      )
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Description'),
-      el('textarea', { class: 'form-textarea', id: 'icDesc', placeholder: 'What happened?' })
-    ),
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Action Taken'),
-      el('input', { class: 'form-input', type: 'text', id: 'icAction', placeholder: 'How was it handled?' })
-    ),
-    el('button', { class: 'btn-primary', onclick: async () => {
-      const sid = studentSelect.value;
-      const s = State.students.find(x => x.Student_ID === sid);
-      const data = {
-        Timestamp: new Date().toISOString(),
-        Date: new Date().toISOString().slice(0,10),
-        Student_ID: sid,
-        Name_EN: s?.Name_EN || '',
-        Class: s?.Class || '',
-        Type: $('#icType').value,
-        Severity: $('#icSev').value,
-        Description: $('#icDesc').value,
-        Action_Taken: $('#icAction').value,
-        Teacher_ID: State.user.id || 'T001'
-      };
-      if (!data.Description) { showToast('Add description', 'error'); return; }
-      showToast('Saving…');
-      try {
-        const r = await api('save_incident', { data });
-        if (r.ok) {
-          showToast('✓ Incident recorded', 'success'); haptic('success');
-          State.incidents.unshift(data);
-          closeSheet(); renderIncidents();
-        }
-      } catch(e) { showToast('Save failed', 'error'); }
-    }}, 'Save Incident')
-  );
-  openSheet('Record Incident', body);
-}
-
-// ============================================================
-// PAGE: TIMETABLE
-// ============================================================
-function renderTimetable() {
-  const f = State.filters.timetable;
-  const items = State.timetable;
-
-  // Day tabs
-  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-  const dayTabs = $('#dayTabs');
-  dayTabs.innerHTML = '';
-  days.forEach(d => {
-    dayTabs.appendChild(el('button', {
-      class: 'day-tab' + (d === f.day ? ' active' : ''),
-      onclick: () => { haptic('selection'); f.day = d; renderTimetable(); }
-    }, d.slice(0, 3)));
-  });
-
-  // Class chips
-  const classes = [...new Set(items.map(r => r.Class).filter(Boolean))].sort();
-  const chipsRow = $('#ttClassChips');
-  chipsRow.innerHTML = '';
-  chipsRow.appendChild(makeChip('ALL', 'All', items.filter(r => r.Day === f.day).length, f.class === 'ALL', () => {
-    f.class = 'ALL'; renderTimetable();
-  }));
-  classes.forEach(cls => {
-    const cnt = items.filter(r => r.Day === f.day && r.Class === cls).length;
-    chipsRow.appendChild(makeChip(cls, cls, cnt, f.class === cls, () => {
-      f.class = cls; renderTimetable();
-    }));
-  });
-
-  let filtered = items.filter(r => r.Day === f.day);
-  if (f.class !== 'ALL') filtered = filtered.filter(r => r.Class === f.class);
-  filtered.sort((a, b) => (a.Period || 0) - (b.Period || 0));
-
-  $('#timetableSubtitle').textContent = `${f.day} • ${f.class === 'ALL' ? 'All classes' : f.class}`;
-
-  const list = $('#timetableList');
-  list.innerHTML = '';
-  if (!filtered.length) {
-    list.appendChild(emptyState('No periods', 'No classes scheduled for this day.'));
-    return;
-  }
-  filtered.forEach(p => {
-    list.appendChild(el('div', { class: 'period-card' },
-      el('div', { class: 'time' },
-        el('div', { class: 'start' }, formatTime(p.Start_Time)),
-        el('div', {}, formatTime(p.End_Time))
-      ),
-      el('div', { class: 'info' },
-        el('div', { class: 'subject' }, p.Subject || '—'),
-        el('div', { class: 'meta' },
-          el('span', {}, p.Class || ''),
-          p.Room ? el('span', {}, '· ' + p.Room) : null
-        )
-      ),
-      el('div', { class: 'badge-num' }, String(p.Period || ''))
-    ));
-  });
-}
-
-// ============================================================
-// PAGE: MONTHLY SUMMARY
-// ============================================================
-function renderSummary() {
-  const f = State.filters.summary;
-  const items = State.monthlySummary;
-
-  const classes = [...new Set(items.map(r => r.Class).filter(Boolean))].sort();
-  const chipsRow = $('#summaryClassChips');
-  chipsRow.innerHTML = '';
-  chipsRow.appendChild(makeChip('ALL', 'All', items.length, f.class === 'ALL', () => {
-    f.class = 'ALL'; renderSummary();
-  }));
-  classes.forEach(cls => {
-    const cnt = items.filter(r => r.Class === cls).length;
-    chipsRow.appendChild(makeChip(cls, cls, cnt, f.class === cls, () => {
-      f.class = cls; renderSummary();
-    }));
-  });
-
-  let filtered = items;
-  if (f.class !== 'ALL') filtered = filtered.filter(r => r.Class === f.class);
-
-  const list = $('#summaryList');
-  list.innerHTML = '';
-  if (!filtered.length) {
-    list.appendChild(emptyState('No summary', 'Monthly data will appear here.'));
-    return;
-  }
-  filtered.forEach(r => {
-    const pct = (r['Attendance_%'] || 0) * 100;
-    const fillClass = pct >= 90 ? '' : pct >= 75 ? 'warn' : 'bad';
-    const student = State.students.find(s => s.Student_ID === r.Student_ID);
-    const card = el('div', { class: 'summary-card' },
-      el('div', { class: 'student-row' },
-        el('div', { class: 'avatar ' + houseClass(student?.House_Color), style: 'width:36px;height:36px;font-size:14px' }, initials(r.Name_EN)),
-        el('div', { class: 'info', style: 'flex:1' },
-          el('div', { class: 'name' }, r.Name_EN || r.Student_ID),
-          el('div', { style: 'font-size:11px;color:var(--ink-3);margin-top:1px' }, r.Class || '')
-        ),
-        r.Overall_Grade ? el('span', { class: 'tag' }, r.Overall_Grade) : null
-      ),
-      el('div', { class: 'summary-stats' },
-        statItem(r.Present_Days || 0, 'Present'),
-        statItem(r.Absent_Days || 0, 'Absent'),
-        statItem(r.Reports_Sent || 0, 'Reports'),
-        statItem(r.HW_Assigned || 0, 'HW')
-      ),
-      el('div', { class: 'attendance-bar' },
-        el('div', { class: 'fill ' + fillClass, style: `width:${pct.toFixed(0)}%` })
-      ),
-      el('div', { style: 'display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);margin-top:6px;font-weight:500' },
-        el('span', {}, 'Attendance'),
-        el('span', { class: 'mono' }, pct.toFixed(1) + '%')
-      )
-    );
-    list.appendChild(card);
-  });
-}
-
-function statItem(num, lbl) {
-  return el('div', { class: 'item' },
-    el('div', { class: 'num' }, String(num)),
-    el('div', { class: 'lbl' }, lbl)
-  );
-}
-
-// ============================================================
-// PAGE: MORE
-// ============================================================
-function renderMore() {
-  const menu = $('#moreMenu');
-  const items = [
-    { icon: '📊', title: 'Monthly Summary', desc: 'Attendance & performance', action: () => switchPage('summary') },
-    { icon: '📅', title: 'Timetable', desc: 'Class schedule', action: () => switchPage('timetable') },
-    { icon: '⚡', title: 'Incidents', desc: 'Behavior & achievement records', action: () => switchPage('incidents') },
-    { icon: '🔄', title: 'Sync Now', desc: 'Refresh from Google Sheets', action: () => bootstrap(true) },
-    { icon: 'ℹ️', title: 'About', desc: `SCMS v${CONFIG.VERSION}`, action: () => showAbout() }
-  ];
-  menu.innerHTML = '';
-  items.forEach(it => {
-    menu.appendChild(el('div', {
-      class: 'student-card',
-      onclick: () => { haptic('selection'); it.action(); }
-    },
-      el('div', { class: 'avatar', style: 'background:var(--line-2);color:var(--ink-2);font-size:20px' }, it.icon),
-      el('div', { class: 'info' },
-        el('div', { class: 'name' }, it.title),
-        el('div', { class: 'name-mm' }, it.desc)
-      )
-    ));
-  });
-}
-
-function showAbout() {
-  const body = el('div', {},
-    el('p', { style: 'color:var(--ink-2);font-size:14px;line-height:1.6' },
-      'School Class Management System (SCMS) Mini App. Connects to Google Sheets via n8n workflow. Built for international school teachers.'),
-    el('div', { class: 'detail-grid' },
-      el('div', { class: 'detail-item' }, el('div', { class: 'label' }, 'Version'), el('div', { class: 'value mono' }, CONFIG.VERSION)),
-      el('div', { class: 'detail-item' }, el('div', { class: 'label' }, 'Mode'), el('div', { class: 'value' }, CONFIG.DEMO_MODE ? 'Demo' : 'Live')),
-      el('div', { class: 'detail-item full' }, el('div', { class: 'label' }, 'School'), el('div', { class: 'value' }, State.schoolConfig.school_name || '—'))
-    )
-  );
-  openSheet('About SCMS', body);
-}
-
-// ============================================================
-// PAGE SWITCHING
-// ============================================================
-function switchPage(page) {
-  State.currentPage = page;
-  $$('.page').forEach(p => p.classList.remove('active'));
-  $('#page-' + page)?.classList.add('active');
-  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
-  haptic('light');
-
-  // Render
-  if (page === 'students') renderStudents();
-  else if (page === 'attend') renderAttendance();
-  else if (page === 'daily') renderDaily();
-  else if (page === 'hw') renderHomework();
-  else if (page === 'parents') renderComms();
-  else if (page === 'incidents') renderIncidents();
-  else if (page === 'timetable') renderTimetable();
-  else if (page === 'summary') renderSummary();
-  else if (page === 'more') renderMore();
-
-  // Scroll to top
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// ============================================================
-// FAB (context-aware)
-// ============================================================
-function handleFab() {
-  haptic('medium');
-  const p = State.currentPage;
-  if (p === 'attend') saveAttendance();
-  else if (p === 'daily') openDailyReportForm();
-  else if (p === 'hw') openHomeworkForm();
-  else if (p === 'parents') openParentMessageForm();
-  else if (p === 'incidents') openIncidentForm();
-  else if (p === 'students') openDailyReportForm(); // quick action
-  else showToast('Use a specific tab to add', 'error');
-}
-
-function updateFab() {
-  const fab = $('#fab');
-  const p = State.currentPage;
-  const visible = ['students','attend','daily','hw','parents','incidents'].includes(p);
-  fab.style.display = visible ? 'flex' : 'none';
-}
-
-// ============================================================
-// BOOTSTRAP
-// ============================================================
-async function bootstrap(force = false) {
-  // Try cache first
-  if (!force) {
-    const cached = Cache.get('bootstrap');
-    if (cached) {
-      hydrateFromBootstrap(cached);
-      switchPage(State.currentPage);
-    }
-  }
-
-  try {
-    const data = await api('bootstrap');
-    if (!data.ok) throw new Error(data.error || 'Bootstrap failed');
-    Cache.set('bootstrap', data);
-    hydrateFromBootstrap(data);
-    switchPage(State.currentPage);
-    if (force) showToast('✓ Synced', 'success');
-  } catch(e) {
-    console.error(e);
-    if (!Cache.get('bootstrap')) {
-      showToast('Could not load data', 'error');
-    }
-  }
-}
-
-function hydrateFromBootstrap(data) {
-  State.students = data.students || [];
-  State.attendance = data.attendance || [];
-  State.dailyReports = data.dailyReports || [];
-  State.homework = data.homework || [];
-  State.parentComms = data.parentComms || [];
-  State.incidents = data.incidents || [];
-  State.timetable = data.timetable || [];
-  State.monthlySummary = data.monthlySummary || [];
-  State.schoolConfig = data.schoolConfig || {};
-
-  if (data.user) {
-    State.user.id = data.user.Teacher_ID || data.user.id || 'T001';
-    State.user.name = data.user.Teacher_Name || data.user.name || 'Teacher';
-    State.user.role = data.user.Role || 'AT';
-  }
-  if (tg?.initDataUnsafe?.user) {
-    const u = tg.initDataUnsafe.user;
-    State.user.tg_id = u.id;
-    State.user.name = u.first_name + (u.last_name ? ' ' + u.last_name : '');
-  }
-
-  $('#schoolName').textContent = State.schoolConfig.school_name || 'School Class Management';
-  $('#userName').textContent = State.user.name || 'Teacher';
-  $('#userRole').textContent = State.user.role;
-}
-
-// ============================================================
-// INIT
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-  // Tab clicks
-  $$('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      switchPage(btn.dataset.page);
-      updateFab();
-    });
-  });
-
-  // FAB
-  $('#fab').addEventListener('click', handleFab);
-
-  // Header refresh
-  $('#btnRefresh').addEventListener('click', () => bootstrap(true));
-
-  // Save Attendance button
-  $('#btnSaveAttendance').addEventListener('click', saveAttendance);
-
-  // Search
-  const searchInput = $('#studentSearchInput');
-  searchInput.addEventListener('input', (e) => {
-    State.filters.students.search = e.target.value;
-    $('#studentSearch').classList.toggle('has-value', !!e.target.value);
-    renderStudents();
-  });
-  $('#studentSearchClear').addEventListener('click', () => {
-    searchInput.value = '';
-    State.filters.students.search = '';
-    $('#studentSearch').classList.remove('has-value');
-    renderStudents();
-    haptic('selection');
-  });
-
-  // Header scroll shadow
-  window.addEventListener('scroll', () => {
-    $('#appHeader').classList.toggle('scrolled', window.scrollY > 4);
-  }, { passive: true });
-
-  // Online/offline
-  window.addEventListener('online', () => document.body.classList.remove('offline'));
-  window.addEventListener('offline', () => document.body.classList.add('offline'));
-  if (!navigator.onLine) document.body.classList.add('offline');
-
-  // ESC to close sheet
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
-
-  // Telegram BackButton
-  if (tg?.BackButton) {
-    const updateBack = () => {
-      if (State.currentPage === 'students') tg.BackButton.hide();
-      else { tg.BackButton.show(); tg.BackButton.onClick(() => switchPage('students')); }
-    };
-    // Hook into switchPage
-    const origSwitch = switchPage;
-    window.switchPage = (p) => { origSwitch(p); updateBack(); };
-  }
-
-  updateFab();
-  bootstrap();
-});
-</script>
 </body>
 </html>
