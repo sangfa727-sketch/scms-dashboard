@@ -1,5 +1,5 @@
 /* ============================================================
-   SCMS v10 — 02_api.js
+   SCMS v10.1 — 02_api.js
    Supabase client init, read path (RPC bootstrap or fallback),
    write path (n8n webhook or direct Supabase fallback),
    and data hydration into State.
@@ -9,6 +9,16 @@
      • WRITE = n8n webhook (triggers AI polish, parent notify,
                and shared backend with the Telegram bot)
      • FALLBACK = direct Supabase write if webhook unreachable
+
+   NEW IN v10.1:
+     • hydrateFromBootstrap now handles:
+         - data.config        → State.config (school customizable lists)
+         - data.subjects      → State.subjects (normalized records)
+         - data.terms         → State.terms
+         - data.currentTerm   → State.currentTerm
+     • loadAllFallback fetches subjects + terms tables too
+     • New writeAction action: 'update_school_config'
+     • saveSchoolConfig() — admin-only helper
    ============================================================ */
 
 /* ---------- SUPABASE CLIENT ---------- */
@@ -24,7 +34,7 @@ function initSupabase() {
   try {
     supa = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON, {
       auth:   { persistSession: false },
-      global: { headers: { 'x-scms-app': 'twa-v10' } }
+      global: { headers: { 'x-scms-app': 'twa-v10.1' } }
     });
     return supa;
   } catch (e) {
@@ -39,8 +49,7 @@ function initSupabase() {
 
 /**
  * Primary read: calls `rpc_bootstrap` which returns one JSON blob
- * with school config + students + 30-day attendance/daily/homework/
- * incidents/parent_comms/timetable/monthly_summary.
+ * with school config + students + 30-day data + subjects + terms.
  *
  * Falls back to per-table reads if the RPC isn't available.
  */
@@ -85,24 +94,44 @@ async function loadAllFallback() {
       supa.from('parent_comms')    .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
       supa.from('incidents')       .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
       supa.from('timetable')       .select('*').eq('school_id', sid).order('day').order('period'),
-      supa.from('monthly_summary') .select('*').eq('school_id', sid).order('class').order('name_en')
+      supa.from('monthly_summary') .select('*').eq('school_id', sid).order('class').order('name_en'),
+      /* NEW v10.1 */
+      supa.from('subjects')        .select('*').eq('school_id', sid).eq('is_active', true).order('display_order'),
+      supa.from('terms')           .select('*').eq('school_id', sid).order('term_order')
     ]);
 
-    const [school, st, at, dr, hw, pc, inc, tt, ms] = fetches;
+    const [school, st, at, dr, hw, pc, inc, tt, ms, subj, terms] = fetches;
     setConn(true);
+
+    /* Get config separately via RPC if possible */
+    let config = null;
+    try {
+      const { data: cfg } = await supa.rpc('rpc_get_school_config', { p_school_id: sid });
+      config = cfg;
+    } catch (e) {
+      console.warn('rpc_get_school_config unavailable, using config_json field:', e);
+      config = school.data?.config_json || null;
+    }
+
+    /* Get current term */
+    const currentTerm = (terms.data || []).find(t => t.is_current) || null;
 
     return hydrateFromBootstrap({
       ok:             true,
       schoolConfig:   school.data || {},
+      config:         config,
       user:           null,
-      students:       st.data  || [],
-      attendance:     at.data  || [],
-      dailyReports:   dr.data  || [],
-      homework:       hw.data  || [],
-      parentComms:    pc.data  || [],
-      incidents:      inc.data || [],
-      timetable:      tt.data  || [],
-      monthlySummary: ms.data  || []
+      students:       st.data    || [],
+      attendance:     at.data    || [],
+      dailyReports:   dr.data    || [],
+      homework:       hw.data    || [],
+      parentComms:    pc.data    || [],
+      incidents:      inc.data   || [],
+      timetable:      tt.data    || [],
+      monthlySummary: ms.data    || [],
+      subjects:       subj.data  || [],
+      terms:          terms.data || [],
+      currentTerm:    currentTerm
     });
   } catch (e) {
     console.error('Fallback fetch failed:', e);
@@ -113,20 +142,20 @@ async function loadAllFallback() {
 }
 
 /* ============================================================
-   WRITE PATH — actions go through n8n webhook by default
-   so the bot + TWA share AI processing & parent notifications.
+   WRITE PATH
    ============================================================ */
 
 /**
  * Primary write: POST to n8n webhook with action + payload.
  *
  * Supported actions:
- *   save_attendance    { records: [{date, student_id, name_en, class, status, note}] }
- *   save_daily_report  { data: {...} }
- *   save_homework      { data: {...} }
- *   save_incident      { data: {...} }
- *   send_parent_comm   { data: {...} }
- *   register_student   { data: {...} }
+ *   save_attendance       { records: [{...}] }
+ *   save_daily_report     { data: {...} }
+ *   save_homework         { data: {...} }
+ *   save_incident         { data: {...} }
+ *   send_parent_comm      { data: {...} }
+ *   register_student      { data: {...} }
+ *   update_school_config  { patch: {...} }     ← NEW v10.1
  */
 async function writeAction(action, payload) {
   if (CONFIG.DEMO) {
@@ -156,24 +185,19 @@ async function writeAction(action, payload) {
     }
   }
 
-  // No webhook configured → write direct (skips bot-side AI/parent notify)
   return writeFallback(action, payload);
 }
 
 /**
  * Fallback write: direct Supabase upserts.
- * Used when n8n webhook is unreachable or not configured.
- * Note: this skips AI polish and bot-side parent notifications.
  */
 async function writeFallback(action, payload) {
   if (!supa) return { ok: false, error: 'no backend' };
 
   try {
-    /* ---------- SAVE ATTENDANCE (batch upsert) ---------- */
     if (action === 'save_attendance') {
       const records = (payload.records || []).map(r => ({
-        ...r,
-        school_id: CONFIG.SCHOOL_ID
+        ...r, school_id: CONFIG.SCHOOL_ID
       }));
       const { error } = await supa
         .from('attendance')
@@ -182,7 +206,6 @@ async function writeFallback(action, payload) {
       return { ok: true, saved: records.length };
     }
 
-    /* ---------- SAVE DAILY REPORT ---------- */
     if (action === 'save_daily_report') {
       const { error } = await supa
         .from('daily_reports')
@@ -191,16 +214,14 @@ async function writeFallback(action, payload) {
       return { ok: true };
     }
 
-    /* ---------- SAVE HOMEWORK ---------- */
     if (action === 'save_homework') {
       const data = { ...payload.data, school_id: CONFIG.SCHOOL_ID };
-      if (!data.due_date) delete data.due_date;          // null date would fail
+      if (!data.due_date) delete data.due_date;
       const { error } = await supa.from('homework_log').insert(data);
       if (error) throw error;
       return { ok: true };
     }
 
-    /* ---------- SAVE INCIDENT ---------- */
     if (action === 'save_incident') {
       const { error } = await supa
         .from('incidents')
@@ -209,43 +230,70 @@ async function writeFallback(action, payload) {
       return { ok: true };
     }
 
-    /* ---------- SEND PARENT COMM (logs only; bot would actually deliver) ---------- */
     if (action === 'send_parent_comm') {
       const { error } = await supa
         .from('parent_comms')
-        .insert({
-          ...payload.data,
-          school_id: CONFIG.SCHOOL_ID,
-          status:    'Queued'
-        });
+        .insert({ ...payload.data, school_id: CONFIG.SCHOOL_ID, status: 'Queued' });
       if (error) throw error;
       return { ok: true };
     }
 
-    /* ---------- REGISTER STUDENT ---------- */
     if (action === 'register_student') {
       const sid = 'S' + Date.now() + Math.floor(Math.random() * 1000);
       const data = {
         ...payload.data,
         student_id: sid,
         school_id:  CONFIG.SCHOOL_ID,
-        status:     'Active'
+        status:     payload.data.status || 'Active'
       };
-      // strip optional empty date fields to avoid validation errors
       if (!data.date_of_birth)   delete data.date_of_birth;
       if (!data.enrollment_date) data.enrollment_date = todayISO();
-
       const { error } = await supa.from('students').insert(data);
       if (error) throw error;
       return { ok: true, student_id: sid };
     }
 
-    return { ok: false, error: 'unknown action: ' + action };
+    /* NEW v10.1: update school config via RPC */
+    if (action === 'update_school_config') {
+      const { data, error } = await supa.rpc('rpc_update_school_config', {
+        p_school_id: CONFIG.SCHOOL_ID,
+        p_patch:     payload.patch || {}
+      });
+      if (error) throw error;
+      return { ok: true, config: data };
+    }
 
+    return { ok: false, error: 'unknown action: ' + action };
   } catch (e) {
     console.error('writeFallback error:', e);
     return { ok: false, error: String(e.message || e) };
   }
+}
+
+/* ============================================================
+   HIGH-LEVEL HELPERS  (NEW in v10.1)
+   ============================================================ */
+
+/**
+ * Save a partial config patch back to the school.
+ * Merges with existing config_json on the server side.
+ *
+ * @param {object} patch - keys to update, e.g. {subjects: [...], houses: [...]}
+ * @returns {Promise<{ok, config?, error?}>}
+ *
+ * Usage:
+ *   await saveSchoolConfig({
+ *     subjects: ['Math', 'Science', 'Quran'],
+ *     week_start: 'Sunday'
+ *   });
+ */
+async function saveSchoolConfig(patch) {
+  const result = await writeAction('update_school_config', { patch });
+  if (result.ok && result.config) {
+    /* Update local State.config with the returned merged config */
+    State.config = { ...CONFIG_DEFAULTS, ...result.config };
+  }
+  return result;
 }
 
 /* ============================================================
@@ -255,6 +303,9 @@ async function writeFallback(action, payload) {
 /**
  * Hydrate State from a bootstrap blob.
  * Updates header UI with school name / user name / role.
+ *
+ * v10.1: now also populates State.config, State.subjects,
+ * State.terms, State.currentTerm
  */
 function hydrateFromBootstrap(data) {
   State.students       = data.students       || [];
@@ -267,7 +318,18 @@ function hydrateFromBootstrap(data) {
   State.monthlySummary = data.monthlySummary || [];
   State.schoolConfig   = data.schoolConfig   || {};
 
-  // Resolve user info (from RPC response if present, else Telegram WebApp)
+  /* NEW v10.1: hydrate config + subjects + terms */
+  if (data.config && typeof data.config === 'object') {
+    /* Merge: defaults overlaid with server config */
+    State.config = { ...CONFIG_DEFAULTS, ...data.config };
+  } else {
+    State.config = { ...CONFIG_DEFAULTS };
+  }
+  State.subjects    = data.subjects    || [];
+  State.terms       = data.terms       || [];
+  State.currentTerm = data.currentTerm || null;
+
+  /* Resolve user info */
   if (data.user) {
     State.user.id   = data.user.teacher_id   || data.user.id   || 'T001';
     State.user.name = data.user.teacher_name || data.user.name || 'Teacher';
@@ -282,7 +344,7 @@ function hydrateFromBootstrap(data) {
     }
   }
 
-  // Reflect in header
+  /* Reflect in header */
   const sn = document.getElementById('schoolName');
   const un = document.getElementById('userName');
   const ur = document.getElementById('userRole');
