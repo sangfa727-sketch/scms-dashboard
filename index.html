@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#FAFAF7">
+  <meta name="version" content="10.1.0">
   <title>SCMS — School Class Management</title>
 
   <!-- Telegram Web App SDK -->
@@ -284,6 +285,7 @@
 </div>
 
 <!-- ===== APPLICATION SCRIPTS (load in order) ===== -->
+<!-- v10.1: 15_settings.js added before 14_app.js (app entry must load last) -->
 <script src="js/01_config.js"></script>
 <script src="js/02_api.js"></script>
 <script src="js/03_utils.js"></script>
@@ -297,6 +299,7 @@
 <script src="js/11_summary.js"></script>
 <script src="js/12_more.js"></script>
 <script src="js/13_register.js"></script>
+<script src="js/15_settings.js"></script>
 <script src="js/14_app.js"></script>
 
 </body>
