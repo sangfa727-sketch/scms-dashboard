@@ -1,141 +1,230 @@
 /* ============================================================
-   SCMS v10 — 11_summary.js
-   Monthly summary page:
-     • Per-student card with avatar + name + class
-     • Stats: present / absent / reports sent / HW assigned
-     • Attendance percentage bar with smart color thresholds
-         ≥ 90%  →  green   (excellent)
-         75–90% →  amber   (warning)
-         < 75%  →  red     (concerning)
+   SCMS v10.1 — 12_more.js
+   More page:
+     • Quick-jump to Summary / Incidents / Parent Messages
+     • Add Student form launcher
+     • School Settings (NEW v10.1 — subjects/houses/grades/etc.)
+     • Connection Settings (Supabase URL, anon key, webhook)
+     • Sync Now (force re-fetch)
+     • About sheet showing version + connection mode + current term
+
+   NEW IN v10.1:
+     • "School Settings" menu item → openSchoolSettings()
+     • "Connection Settings" renamed (was "Settings")
+     • About sheet shows current term + config summary
    ============================================================ */
 
 /* ============================================================
-   PAGE: MONTHLY SUMMARY
+   PAGE: MORE
    ============================================================ */
 
 /**
- * Re-render the monthly-summary page from State.
+ * Re-render the more page.
+ * Built from a static menu list — no data dependency.
  */
-function renderSummary() {
-  const f     = State.filters.summary;
-  const items = State.monthlySummary;
+function renderMore() {
+  const menu = $('#moreMenu');
 
-  /* ---------- Class chips ---------- */
-  const classes  = [...new Set(items.map(r => r.class).filter(Boolean))].sort();
-  const chipsRow = $('#summaryClassChips');
-  chipsRow.innerHTML = '';
+  /* ---------- Menu items ---------- */
+  const items = [
+    {
+      icon:   '📊',
+      title:  'Monthly Summary',
+      desc:   'Attendance & performance overview',
+      action: () => switchPage('summary')
+    },
+    {
+      icon:   '⚡',
+      title:  'Incidents',
+      desc:   'Behavior & achievement records',
+      action: () => switchPage('incidents')
+    },
+    {
+      icon:   '💬',
+      title:  'Parent Messages',
+      desc:   'Communication log',
+      action: () => switchPage('parents')
+    },
+    {
+      icon:   '➕',
+      title:  'Add Student',
+      desc:   'Register a new student',
+      action: () => openStudentRegistrationForm()
+    },
+    /* NEW v10.1: School Settings (subjects/houses/grades/etc.) */
+    {
+      icon:   '🏫',
+      title:  'School Settings',
+      desc:   'Subjects, houses, grades, schedule…',
+      action: () => openSchoolSettings()
+    },
+    {
+      icon:   '🔄',
+      title:  'Sync Now',
+      desc:   'Refresh data from Supabase',
+      action: () => bootstrap(true)
+    },
+    {
+      icon:   '🔌',
+      title:  'Connection Settings',
+      desc:   'Supabase URL & webhook config',
+      action: () => showSetup()
+    },
+    {
+      icon:   'ℹ️',
+      title:  'About',
+      desc:   `SCMS v${CONFIG.VERSION}`,
+      action: () => showAbout()
+    }
+  ];
 
-  chipsRow.appendChild(makeChip(
-    'ALL', 'All', items.length, f.class === 'ALL',
-    () => { f.class = 'ALL'; renderSummary(); }
-  ));
+  /* ---------- Render menu (reuses student-card styling) ---------- */
+  menu.innerHTML = '';
 
-  classes.forEach(cls => {
-    const cnt = items.filter(r => r.class === cls).length;
-    chipsRow.appendChild(makeChip(
-      cls, cls, cnt, f.class === cls,
-      () => { f.class = cls; renderSummary(); }
+  items.forEach(it => {
+    menu.appendChild(el('div', {
+      class:   'student-card',
+      onclick: () => { haptic('selection'); it.action(); }
+    },
+      el('div', {
+        class: 'avatar',
+        style: 'background:var(--line-2);color:var(--ink-2);font-size:20px'
+      }, it.icon),
+
+      el('div', { class: 'info' },
+        el('div', { class: 'name' },    it.title),
+        el('div', { class: 'name-mm' }, it.desc)
+      )
     ));
-  });
-
-  /* ---------- Apply filter ---------- */
-  let filtered = items;
-  if (f.class !== 'ALL') {
-    filtered = filtered.filter(r => r.class === f.class);
-  }
-
-  /* ---------- Render list ---------- */
-  const list = $('#summaryList');
-  list.innerHTML = '';
-
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No summary',
-      'Monthly data will appear here once attendance is recorded.',
-      '📊'
-    ));
-    return;
-  }
-
-  filtered.forEach(r => {
-    list.appendChild(summaryCard(r));
   });
 }
 
 /* ============================================================
-   SUMMARY CARD
+   ABOUT SHEET
    ============================================================ */
 
 /**
- * Build one summary card for a student.
+ * Show the About bottom sheet with app metadata.
+ * v10.1: now includes current term, subject count, config summary.
  */
-function summaryCard(r) {
-  /* ---------- Attendance % + color ---------- */
-  const pct = (r.attendance_pct || 0) * 100;
-  const fillClass =
-    pct >= 90 ? ''     :   // green (default)
-    pct >= 75 ? 'warn' :   // amber
-                'bad';     // red
+function showAbout() {
+  /* Compute connection mode label */
+  const mode =
+    CONFIG.DEMO          ? 'Demo'         :
+    CONFIG.SUPABASE_URL  ? 'Live'         :
+                           'Unconfigured';
 
-  /* ---------- Cross-reference with State.students to get house color ---------- */
-  const student = State.students.find(s => s.student_id === r.student_id);
+  const term = State.currentTerm;
+  const termLabel = term
+    ? `${term.term_name} · ${formatDate(term.start_date)} → ${formatDate(term.end_date)}`
+    : null;
 
-  return el('div', { class: 'summary-card' },
+  const body = el('div', {},
 
-    /* ---------- Header row: avatar + name + grade ---------- */
-    el('div', { class: 'student-row' },
-      el('div', {
-        class: 'avatar ' + houseClass(student?.house_color),
-        style: 'width:36px;height:36px;font-size:14px'
-      }, initials(r.name_en)),
+    /* ---------- Description ---------- */
+    el('p', {
+      style: 'color:var(--ink-2);font-size:14px;line-height:1.6'
+    },
+      'School Class Management System. Telegram Mini App connected to ' +
+      'Supabase (database) and n8n (bot orchestration + AI smart chat). ' +
+      'Built for international school teachers.'
+    ),
 
-      el('div', { class: 'info', style: 'flex:1' },
-        el('div', { class: 'name' }, r.name_en || r.student_id),
-        el('div', {
-          style: 'font-size:11px;color:var(--ink-3);margin-top:1px'
-        }, r.class || '')
+    /* ---------- Metadata grid ---------- */
+    el('div', { class: 'detail-grid' },
+
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Version'),
+        el('div', { class: 'value mono' }, CONFIG.VERSION)
       ),
 
-      r.overall_grade
-        ? el('span', { class: 'tag' }, r.overall_grade)
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Mode'),
+        el('div', { class: 'value' }, mode)
+      ),
+
+      el('div', { class: 'detail-item full' },
+        el('div', { class: 'label' }, 'School'),
+        el('div', { class: 'value' }, State.schoolConfig.school_name || '—')
+      ),
+
+      el('div', { class: 'detail-item full' },
+        el('div', { class: 'label' }, 'School ID'),
+        el('div', { class: 'value mono' }, CONFIG.SCHOOL_ID)
+      ),
+
+      State.user.name
+        ? el('div', { class: 'detail-item' },
+            el('div', { class: 'label' }, 'Teacher'),
+            el('div', { class: 'value' }, State.user.name)
+          )
+        : null,
+
+      State.user.id
+        ? el('div', { class: 'detail-item' },
+            el('div', { class: 'label' }, 'Teacher ID'),
+            el('div', { class: 'value mono' }, State.user.id)
+          )
+        : null,
+
+      State.schoolConfig.academic_year
+        ? el('div', { class: 'detail-item full' },
+            el('div', { class: 'label' }, 'Academic Year'),
+            el('div', { class: 'value' }, State.schoolConfig.academic_year)
+          )
+        : null,
+
+      /* NEW v10.1: current term */
+      termLabel
+        ? el('div', { class: 'detail-item full' },
+            el('div', { class: 'label' }, 'Current Term'),
+            el('div', { class: 'value' }, termLabel)
+          )
         : null
     ),
 
-    /* ---------- 4-column stats ---------- */
-    el('div', { class: 'summary-stats' },
-      statItem(r.present_days   || 0, 'Present'),
-      statItem(r.absent_days    || 0, 'Absent'),
-      statItem(r.reports_sent   || 0, 'Reports'),
-      statItem(r.hw_assigned    || 0, 'HW')
+    /* ---------- Statistics ---------- */
+    el('div', { class: 'detail-grid', style: 'margin-top:16px' },
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Students'),
+        el('div', { class: 'value mono' }, String(State.students.length))
+      ),
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Classes'),
+        el('div', { class: 'value mono' }, String(getClasses().length))
+      ),
+      /* NEW v10.1 */
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Subjects'),
+        el('div', { class: 'value mono' }, String(getSubjects().length))
+      ),
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Houses'),
+        el('div', { class: 'value mono' }, String(getHouses().length))
+      )
     ),
 
-    /* ---------- Attendance bar ---------- */
-    el('div', { class: 'attendance-bar' },
-      el('div', {
-        class: 'fill ' + fillClass,
-        style: `width:${pct.toFixed(0)}%`
-      })
+    /* NEW v10.1: locale info */
+    el('div', { class: 'detail-grid', style: 'margin-top:8px' },
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Language'),
+        el('div', { class: 'value' }, getConfigValue('local_language', 'English'))
+      ),
+      el('div', { class: 'detail-item' },
+        el('div', { class: 'label' }, 'Week Start'),
+        el('div', { class: 'value' }, getConfigValue('week_start', 'Monday'))
+      )
     ),
 
-    /* ---------- Bar label ---------- */
-    el('div', {
+    /* ---------- Tech credits ---------- */
+    el('p', {
       style:
-        'display:flex;justify-content:space-between;' +
-        'font-size:11px;color:var(--ink-3);' +
-        'margin-top:6px;font-weight:500'
+        'color:var(--ink-3);font-size:11px;text-align:center;' +
+        'margin-top:24px;line-height:1.6'
     },
-      el('span', {}, 'Attendance'),
-      el('span', { class: 'mono' }, pct.toFixed(1) + '%')
+      'Powered by Telegram WebApp + Supabase + n8n + OpenAI'
     )
   );
-}
 
-/**
- * Build a single stat item inside the 4-column grid.
- */
-function statItem(num, lbl) {
-  return el('div', { class: 'item' },
-    el('div', { class: 'num' }, String(num)),
-    el('div', { class: 'lbl' }, lbl)
-  );
+  openSheet('About SCMS', body);
 }
