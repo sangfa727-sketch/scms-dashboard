@@ -1,9 +1,15 @@
 /* ============================================================
-   SCMS v10 — 07_homework.js
+   SCMS v10.1 — 07_homework.js
    Homework page:
-     • Filterable list of assignments (Homework / Lesson / Project / Quiz)
+     • Filterable list of assignments (Homework / Lesson / Project / Quiz / ...)
      • Entry cards with subject, type, LB / WB page, description, due date
      • Form sheet to assign new homework
+
+   NEW IN v10.1:
+     • Subjects loaded from State.subjects / State.config.subjects
+       (school-customizable, no longer hardcoded)
+     • Type list loaded from State.config.homework_types
+     • Subject color shown on subject tag (if defined)
    ============================================================ */
 
 /* ============================================================
@@ -54,13 +60,30 @@ function renderHomework() {
     return;
   }
 
+  /* ---------- Build subject color lookup ---------- */
+  const subjectColors = {};
+  getSubjects().forEach(s => {
+    if (s.subject_color) {
+      subjectColors[s.subject_name] = s.subject_color;
+      subjectColors[s.subject_code] = s.subject_color;
+    }
+  });
+
   filtered
     .sort((a, b) => String(b.date).localeCompare(String(a.date)))
     .forEach(r => {
+      /* Apply subject color if known */
+      const color = subjectColors[r.subject];
+      const subjectTag = el('span', { class: 'tag' }, r.subject || '—');
+      if (color) {
+        subjectTag.style.background = color + '22';   // 13% alpha
+        subjectTag.style.color      = color;
+      }
+
       list.appendChild(el('div', { class: 'entry-card' },
         el('div', { class: 'entry-meta' },
-          el('span', { class: 'tag' },      r.subject || '—'),
-          el('span', { class: 'tag gray' }, r.type    || 'Homework'),
+          subjectTag,
+          el('span', { class: 'tag gray' }, r.type || 'Homework'),
           el('span', { class: 'entry-date mono' }, formatDate(r.date))
         ),
         el('div', { class: 'entry-title' }, r.class || ''),
@@ -83,44 +106,42 @@ function renderHomework() {
 /**
  * Open the assign-homework form sheet.
  *
- * Saves through writeAction('save_homework') which routes
- * through n8n where the bot can broadcast it to all parents
- * in the class.
+ * v10.1: subject list pulled from State.subjects (normalized) or
+ * State.config.subjects (fallback). Homework types from
+ * State.config.homework_types.
+ *
+ * Saves through writeAction('save_homework') → n8n → Supabase.
  */
 function openHomeworkForm() {
   const classes  = getClasses();
-  const subjects = [
-    'Maths',
-    'Primary English',
-    'Science',
-    'Social Studies',
-    'Myanmar',
-    'Art',
-    'PE',
-    'Music',
-    'Reading',
-    'Library'
-  ];
+  const subjects = getSubjects();              /* normalized: [{code,name,color}] */
+  const types    = getConfigList('homework_types');
 
   /* ---------- Class dropdown ---------- */
   const classSelect = el('select', { class: 'form-select', id: 'hwClass' });
-  classSelect.innerHTML = classes
-    .map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
-    .join('');
+  if (classes.length) {
+    classSelect.innerHTML = classes
+      .map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
+      .join('');
+  } else {
+    classSelect.innerHTML = '<option value="">— No classes yet —</option>';
+  }
 
   /* ---------- Subject dropdown ---------- */
   const subjectSelect = el('select', { class: 'form-select', id: 'hwSubject' });
-  subjectSelect.innerHTML = subjects.map(s => `<option>${s}</option>`).join('');
+  if (subjects.length) {
+    subjectSelect.innerHTML = subjects
+      .map(s => `<option value="${escapeHTML(s.subject_name)}">${escapeHTML(s.subject_name)}</option>`)
+      .join('');
+  } else {
+    subjectSelect.innerHTML = '<option value="">— No subjects configured —</option>';
+  }
 
   /* ---------- Type dropdown ---------- */
   const typeSelect = el('select', { class: 'form-select', id: 'hwType' });
-  typeSelect.innerHTML =
-    '<option>Homework</option>' +
-    '<option>Lesson</option>' +
-    '<option>Project</option>' +
-    '<option>Quiz</option>' +
-    '<option>Test</option>' +
-    '<option>Reading</option>';
+  typeSelect.innerHTML = types
+    .map(t => `<option>${escapeHTML(t)}</option>`)
+    .join('');
 
   /* ---------- Build sheet body ---------- */
   const body = el('div', {},
@@ -144,39 +165,30 @@ function openHomeworkForm() {
       el('div', { class: 'form-group' },
         el('label', { class: 'form-label' }, 'LB Page'),
         el('input', {
-          class:       'form-input',
-          type:        'text',
-          id:          'hwLB',
-          placeholder: 'e.g. 12'
+          class: 'form-input', type: 'text', id: 'hwLB', placeholder: 'e.g. 12'
         })
       ),
       el('div', { class: 'form-group' },
         el('label', { class: 'form-label' }, 'WB Page'),
         el('input', {
-          class:       'form-input',
-          type:        'text',
-          id:          'hwWB',
-          placeholder: 'e.g. 8'
+          class: 'form-input', type: 'text', id: 'hwWB', placeholder: 'e.g. 8'
         })
       )
     ),
 
     el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Description ', el('span', { class: 'req' }, '*')),
+      el('label', { class: 'form-label' },
+        'Description ', el('span', { class: 'req' }, '*')
+      ),
       el('textarea', {
-        class:       'form-textarea',
-        id:          'hwDesc',
+        class: 'form-textarea', id: 'hwDesc',
         placeholder: 'What should students do?'
       })
     ),
 
     el('div', { class: 'form-group' },
       el('label', { class: 'form-label' }, 'Due Date'),
-      el('input', {
-        class: 'form-input',
-        type:  'date',
-        id:    'hwDue'
-      })
+      el('input', { class: 'form-input', type: 'date', id: 'hwDue' })
     ),
 
     /* ---------- Save button ---------- */
@@ -196,6 +208,16 @@ function openHomeworkForm() {
         };
 
         /* ---------- Validation ---------- */
+        if (!data.class) {
+          showToast('Please pick a class', 'error');
+          haptic('error');
+          return;
+        }
+        if (!data.subject) {
+          showToast('Please pick a subject', 'error');
+          haptic('error');
+          return;
+        }
         if (!data.description) {
           showToast('Add description', 'error');
           haptic('error');
