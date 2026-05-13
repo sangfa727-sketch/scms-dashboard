@@ -1,356 +1,199 @@
-/* ============================================================
-   SCMS v10.1 — 02_api.js
-   Supabase client init, read path (RPC bootstrap or fallback),
-   write path (n8n webhook or direct Supabase fallback),
-   and data hydration into State.
+/**
+ * SCMS v10.2 — 02_api.js
+ * All data operations. Read = Supabase anon. Write = n8n TWA webhook.
+ * Every call automatically includes school_id + teacher_id from APP context.
+ */
 
-   Architecture: HYBRID
-     • READ  = direct Supabase (fast, simple)
-     • WRITE = n8n webhook (triggers AI polish, parent notify,
-               and shared backend with the Telegram bot)
-     • FALLBACK = direct Supabase write if webhook unreachable
+'use strict';
 
-   NEW IN v10.1:
-     • hydrateFromBootstrap now handles:
-         - data.config        → State.config (school customizable lists)
-         - data.subjects      → State.subjects (normalized records)
-         - data.terms         → State.terms
-         - data.currentTerm   → State.currentTerm
-     • loadAllFallback fetches subjects + terms tables too
-     • New writeAction action: 'update_school_config'
-     • saveSchoolConfig() — admin-only helper
-   ============================================================ */
+const API = {
 
-/* ---------- SUPABASE CLIENT ---------- */
-let supa = null;
+  // ─── BOOTSTRAP ───────────────────────────────────────────────────────────
 
-function initSupabase() {
-  if (CONFIG.DEMO) return null;
-  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON) return null;
-  if (!window.supabase?.createClient) {
-    console.warn('Supabase JS not loaded');
-    return null;
-  }
-  try {
-    supa = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON, {
-      auth:   { persistSession: false },
-      global: { headers: { 'x-scms-app': 'twa-v10.1' } }
+  /**
+   * Bootstrap: calls rpc_bootstrap via n8n webhook.
+   * Returns full school context + cached data for offline use.
+   */
+  async bootstrap(telegram_id, school_id) {
+    const resp = await fetch(SCMS_CONFIG.N8N_BOOTSTRAP, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        action:      'bootstrap',
+        telegram_id,
+        school_id:   school_id || undefined,
+        initData:    window.APP.initData,
+      }),
     });
-    return supa;
-  } catch (e) {
-    console.error('Supabase init failed:', e);
-    return null;
-  }
-}
+    if (!resp.ok) throw new Error(`Bootstrap failed: ${resp.status}`);
+    const result = await resp.json();
+    // n8n returns { ok, schoolConfig, config, currentTerm, user, students, ... }
+    return result;
+  },
 
-/* ============================================================
-   READ PATH — load everything for the school
-   ============================================================ */
+  // ─── ATTENDANCE ──────────────────────────────────────────────────────────
 
-/**
- * Primary read: calls `rpc_bootstrap` which returns one JSON blob
- * with school config + students + 30-day data + subjects + terms.
- *
- * Falls back to per-table reads if the RPC isn't available.
- */
-async function loadAll() {
-  if (CONFIG.DEMO || !supa) {
-    return hydrateFromBootstrap({ ok: true, ...DEMO });
-  }
-  try {
-    const { data, error } = await supa.rpc('rpc_bootstrap', {
-      p_school_id:   CONFIG.SCHOOL_ID,
-      p_telegram_id: State.user.tg_id ? String(State.user.tg_id) : null
+  /** Save attendance batch via n8n TWA webhook (rpc_save_attendance). */
+  async saveAttendance(cls, date, records) {
+    // records = [{student_id, status}]
+    return twaPost('save_attendance', {
+      class:   cls,
+      date,
+      records,
     });
-    if (error) throw error;
-    setConn(true);
-    return hydrateFromBootstrap(data);
-  } catch (e) {
-    console.warn('RPC bootstrap failed, falling back to per-table reads:', e);
-    return loadAllFallback();
-  }
-}
+  },
 
-/**
- * Fallback read path — parallel SELECT per table.
- * Used if the RPC isn't created yet or returns an error.
- */
-async function loadAllFallback() {
-  if (!supa) {
-    setConn(false);
-    showToast('No backend — using demo data', 'error');
-    return hydrateFromBootstrap({ ok: true, ...DEMO });
-  }
-  try {
-    const sid   = CONFIG.SCHOOL_ID;
-    const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  /** Read recent attendance (last 30 days) for school. */
+  async getAttendance(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000)
+      .toISOString().slice(0, 10);
+    return sbQuery(
+      'attendance',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc,class`
+    );
+  },
 
-    const fetches = await Promise.all([
-      supa.from('schools')         .select('*').eq('school_id', sid).maybeSingle(),
-      supa.from('students')        .select('*').eq('school_id', sid).eq('status', 'Active').order('class').order('name_en'),
-      supa.from('attendance')      .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
-      supa.from('daily_reports')   .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
-      supa.from('homework_log')    .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
-      supa.from('parent_comms')    .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
-      supa.from('incidents')       .select('*').eq('school_id', sid).gte('date', since).order('date', { ascending: false }),
-      supa.from('timetable')       .select('*').eq('school_id', sid).order('day').order('period'),
-      supa.from('monthly_summary') .select('*').eq('school_id', sid).order('class').order('name_en'),
-      /* NEW v10.1 */
-      supa.from('subjects')        .select('*').eq('school_id', sid).eq('is_active', true).order('display_order'),
-      supa.from('terms')           .select('*').eq('school_id', sid).order('term_order')
-    ]);
+  // ─── STUDENTS ────────────────────────────────────────────────────────────
 
-    const [school, st, at, dr, hw, pc, inc, tt, ms, subj, terms] = fetches;
-    setConn(true);
+  async getStudents() {
+    return sbQuery(
+      'students',
+      `school_id=eq.${window.APP.school_id}&status=eq.Active&order=class,name_en`
+    );
+  },
 
-    /* Get config separately via RPC if possible */
-    let config = null;
-    try {
-      const { data: cfg } = await supa.rpc('rpc_get_school_config', { p_school_id: sid });
-      config = cfg;
-    } catch (e) {
-      console.warn('rpc_get_school_config unavailable, using config_json field:', e);
-      config = school.data?.config_json || null;
-    }
+  /** Register new student (generates student_id via RPC). */
+  async registerStudent(data) {
+    return twaPost('register_student', data);
+  },
 
-    /* Get current term */
-    const currentTerm = (terms.data || []).find(t => t.is_current) || null;
+  // ─── DAILY REPORTS ───────────────────────────────────────────────────────
 
-    return hydrateFromBootstrap({
-      ok:             true,
-      schoolConfig:   school.data || {},
-      config:         config,
-      user:           null,
-      students:       st.data    || [],
-      attendance:     at.data    || [],
-      dailyReports:   dr.data    || [],
-      homework:       hw.data    || [],
-      parentComms:    pc.data    || [],
-      incidents:      inc.data   || [],
-      timetable:      tt.data    || [],
-      monthlySummary: ms.data    || [],
-      subjects:       subj.data  || [],
-      terms:          terms.data || [],
-      currentTerm:    currentTerm
+  async saveDailyReport(data) {
+    return twaPost('save_daily_report', {
+      ...data,
+      date: data.date || new Date().toISOString().slice(0, 10),
     });
-  } catch (e) {
-    console.error('Fallback fetch failed:', e);
-    setConn(false);
-    showToast('Connection failed — using cached/demo', 'error');
-    return hydrateFromBootstrap({ ok: true, ...DEMO });
-  }
-}
+  },
 
-/* ============================================================
-   WRITE PATH
-   ============================================================ */
+  async getDailyReports(daysBack = 7) {
+    const since = new Date(Date.now() - daysBack * 86400000)
+      .toISOString().slice(0, 10);
+    return sbQuery(
+      'daily_reports',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc,name_en`
+    );
+  },
 
-/**
- * Primary write: POST to n8n webhook with action + payload.
- *
- * Supported actions:
- *   save_attendance       { records: [{...}] }
- *   save_daily_report     { data: {...} }
- *   save_homework         { data: {...} }
- *   save_incident         { data: {...} }
- *   send_parent_comm      { data: {...} }
- *   register_student      { data: {...} }
- *   update_school_config  { patch: {...} }     ← NEW v10.1
- */
-async function writeAction(action, payload) {
-  if (CONFIG.DEMO) {
-    await new Promise(r => setTimeout(r, 250));
-    return { ok: true, demo: true };
-  }
+  // ─── HOMEWORK ────────────────────────────────────────────────────────────
 
-  if (CONFIG.WEBHOOK_URL) {
-    try {
-      const res = await fetch(CONFIG.WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          school_id:    CONFIG.SCHOOL_ID,
-          teacher_id:   State.user.id || 'T001',
-          tg_init_data: tg?.initData || '',
-          version:      CONFIG.VERSION,
-          ...payload
-        })
-      });
-      if (!res.ok) throw new Error('webhook ' + res.status);
-      return await res.json();
-    } catch (e) {
-      console.warn('Webhook write failed, falling back to direct Supabase:', e);
-      return writeFallback(action, payload);
-    }
-  }
+  async saveHomework(data) {
+    return twaPost('save_homework', {
+      ...data,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      school_id:  window.APP.school_id,
+      teacher_id: window.APP.teacher_id,
+    });
+  },
 
-  return writeFallback(action, payload);
-}
+  async getHomework(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000)
+      .toISOString().slice(0, 10);
+    return sbQuery(
+      'homework_log',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc`
+    );
+  },
 
-/**
- * Fallback write: direct Supabase upserts.
- */
-async function writeFallback(action, payload) {
-  if (!supa) return { ok: false, error: 'no backend' };
+  // ─── INCIDENTS ───────────────────────────────────────────────────────────
 
-  try {
-    if (action === 'save_attendance') {
-      const records = (payload.records || []).map(r => ({
-        ...r, school_id: CONFIG.SCHOOL_ID
-      }));
-      const { error } = await supa
-        .from('attendance')
-        .upsert(records, { onConflict: 'date,student_id' });
-      if (error) throw error;
-      return { ok: true, saved: records.length };
-    }
+  async saveIncident(data) {
+    return twaPost('save_incident', {
+      ...data,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      school_id:  window.APP.school_id,
+      teacher_id: window.APP.teacher_id,
+    });
+  },
 
-    if (action === 'save_daily_report') {
-      const { error } = await supa
-        .from('daily_reports')
-        .insert({ ...payload.data, school_id: CONFIG.SCHOOL_ID });
-      if (error) throw error;
-      return { ok: true };
-    }
+  async getIncidents(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000)
+      .toISOString().slice(0, 10);
+    return sbQuery(
+      'incidents',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc`
+    );
+  },
 
-    if (action === 'save_homework') {
-      const data = { ...payload.data, school_id: CONFIG.SCHOOL_ID };
-      if (!data.due_date) delete data.due_date;
-      const { error } = await supa.from('homework_log').insert(data);
-      if (error) throw error;
-      return { ok: true };
-    }
+  // ─── PARENT COMMS ────────────────────────────────────────────────────────
 
-    if (action === 'save_incident') {
-      const { error } = await supa
-        .from('incidents')
-        .insert({ ...payload.data, school_id: CONFIG.SCHOOL_ID });
-      if (error) throw error;
-      return { ok: true };
-    }
+  async sendParentComm(data) {
+    return twaPost('send_parent_comm', {
+      ...data,
+      school_id:  window.APP.school_id,
+      teacher_id: window.APP.teacher_id,
+    });
+  },
 
-    if (action === 'send_parent_comm') {
-      const { error } = await supa
-        .from('parent_comms')
-        .insert({ ...payload.data, school_id: CONFIG.SCHOOL_ID, status: 'Queued' });
-      if (error) throw error;
-      return { ok: true };
-    }
+  async getParentComms(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000)
+      .toISOString().slice(0, 10);
+    return sbQuery(
+      'parent_comms',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc`
+    );
+  },
 
-    if (action === 'register_student') {
-      const sid = 'S' + Date.now() + Math.floor(Math.random() * 1000);
-      const data = {
-        ...payload.data,
-        student_id: sid,
-        school_id:  CONFIG.SCHOOL_ID,
-        status:     payload.data.status || 'Active'
-      };
-      if (!data.date_of_birth)   delete data.date_of_birth;
-      if (!data.enrollment_date) data.enrollment_date = todayISO();
-      const { error } = await supa.from('students').insert(data);
-      if (error) throw error;
-      return { ok: true, student_id: sid };
-    }
+  // ─── TIMETABLE ───────────────────────────────────────────────────────────
 
-    /* NEW v10.1: update school config via RPC */
-    if (action === 'update_school_config') {
-      const { data, error } = await supa.rpc('rpc_update_school_config', {
-        p_school_id: CONFIG.SCHOOL_ID,
-        p_patch:     payload.patch || {}
-      });
-      if (error) throw error;
-      return { ok: true, config: data };
-    }
+  async getTimetable() {
+    return sbQuery(
+      'timetable',
+      `school_id=eq.${window.APP.school_id}&order=day,period`
+    );
+  },
 
-    return { ok: false, error: 'unknown action: ' + action };
-  } catch (e) {
-    console.error('writeFallback error:', e);
-    return { ok: false, error: String(e.message || e) };
-  }
-}
+  // ─── MONTHLY SUMMARY ─────────────────────────────────────────────────────
 
-/* ============================================================
-   HIGH-LEVEL HELPERS  (NEW in v10.1)
-   ============================================================ */
+  async getMonthlySummary(yearMonth) {
+    const ym = yearMonth || new Date().toISOString().slice(0, 7);
+    return sbQuery(
+      'monthly_summary',
+      `school_id=eq.${window.APP.school_id}&year_month=eq.${ym}&order=class,name_en`
+    );
+  },
 
-/**
- * Save a partial config patch back to the school.
- * Merges with existing config_json on the server side.
- *
- * @param {object} patch - keys to update, e.g. {subjects: [...], houses: [...]}
- * @returns {Promise<{ok, config?, error?}>}
- *
- * Usage:
- *   await saveSchoolConfig({
- *     subjects: ['Math', 'Science', 'Quran'],
- *     week_start: 'Sunday'
- *   });
- */
-async function saveSchoolConfig(patch) {
-  const result = await writeAction('update_school_config', { patch });
-  if (result.ok && result.config) {
-    /* Update local State.config with the returned merged config */
-    State.config = { ...CONFIG_DEFAULTS, ...result.config };
-  }
-  return result;
-}
+  // ─── SCHOOL CONFIG ───────────────────────────────────────────────────────
 
-/* ============================================================
-   DATA HYDRATION
-   ============================================================ */
+  async updateSchoolConfig(patch) {
+    return twaPost('update_school_config', { patch });
+  },
 
-/**
- * Hydrate State from a bootstrap blob.
- * Updates header UI with school name / user name / role.
- *
- * v10.1: now also populates State.config, State.subjects,
- * State.terms, State.currentTerm
- */
-function hydrateFromBootstrap(data) {
-  State.students       = data.students       || [];
-  State.attendance     = data.attendance     || [];
-  State.dailyReports   = data.dailyReports   || [];
-  State.homework       = data.homework       || [];
-  State.parentComms    = data.parentComms    || [];
-  State.incidents      = data.incidents      || [];
-  State.timetable      = data.timetable      || [];
-  State.monthlySummary = data.monthlySummary || [];
-  State.schoolConfig   = data.schoolConfig   || {};
+  // ─── REFRESH ALL ─────────────────────────────────────────────────────────
 
-  /* NEW v10.1: hydrate config + subjects + terms */
-  if (data.config && typeof data.config === 'object') {
-    /* Merge: defaults overlaid with server config */
-    State.config = { ...CONFIG_DEFAULTS, ...data.config };
-  } else {
-    State.config = { ...CONFIG_DEFAULTS };
-  }
-  State.subjects    = data.subjects    || [];
-  State.terms       = data.terms       || [];
-  State.currentTerm = data.currentTerm || null;
+  /** Re-fetch live data from Supabase and update APP cache. */
+  async refreshAll() {
+    const [students, attendance, dailyReports, homework, parentComms, incidents, timetable] =
+      await Promise.allSettled([
+        API.getStudents(),
+        API.getAttendance(30),
+        API.getDailyReports(30),
+        API.getHomework(30),
+        API.getParentComms(30),
+        API.getIncidents(30),
+        API.getTimetable(),
+      ]);
 
-  /* Resolve user info */
-  if (data.user) {
-    State.user.id   = data.user.teacher_id   || data.user.id   || 'T001';
-    State.user.name = data.user.teacher_name || data.user.name || 'Teacher';
-    State.user.role = data.user.role || 'AT';
-  }
+    if (students.status     === 'fulfilled') window.APP.students     = students.value     || [];
+    if (attendance.status   === 'fulfilled') window.APP.attendance   = attendance.value   || [];
+    if (dailyReports.status === 'fulfilled') window.APP.dailyReports = dailyReports.value || [];
+    if (homework.status     === 'fulfilled') window.APP.homework     = homework.value     || [];
+    if (parentComms.status  === 'fulfilled') window.APP.parentComms  = parentComms.value  || [];
+    if (incidents.status    === 'fulfilled') window.APP.incidents    = incidents.value    || [];
+    if (timetable.status    === 'fulfilled') window.APP.timetable    = timetable.value    || [];
 
-  if (tg?.initDataUnsafe?.user) {
-    const u = tg.initDataUnsafe.user;
-    State.user.tg_id = u.id;
-    if (!State.user.name || State.user.name === 'Teacher') {
-      State.user.name = u.first_name + (u.last_name ? ' ' + u.last_name : '');
-    }
-  }
+    return window.APP;
+  },
+};
 
-  /* Reflect in header */
-  const sn = document.getElementById('schoolName');
-  const un = document.getElementById('userName');
-  const ur = document.getElementById('userRole');
-  if (sn) sn.textContent = State.schoolConfig.school_name || 'School Class Management';
-  if (un) un.textContent = State.user.name || 'Teacher';
-  if (ur) ur.textContent = State.user.role || 'AT';
-
-  return data;
-}
+window.API = API;
