@@ -1,228 +1,228 @@
-/* ============================================================
-   SCMS v10 — 05_attendance.js
-   Attendance page:
-     • ±3-day date strip with selected highlight
-     • Class chips (one tap to switch class)
-     • Live stats (Present / Absent / Marked X of Y)
-     • Per-student row with P/A/L/T status pills
-     • Batch save through writeAction('save_attendance')
-   ============================================================ */
-
-/* ============================================================
-   PAGE: ATTENDANCE
-   ============================================================ */
-
 /**
- * Re-render the attendance page from State.
- * Pre-fills any already-saved marks for the selected date.
+ * SCMS v10.2 — 05_attendance.js
+ * Attendance marking: class picker → student grid → save via n8n RPC.
  */
+
+'use strict';
+
+let _attendClass   = null;
+let _attendDate    = new Date().toISOString().slice(0, 10);
+let _attendMarks   = {};   // { student_id: status_code }
+
 function renderAttendance() {
-  const { students } = State;
-  const f = State.filters;
+  _renderDateStrip();
+  _renderAttendClassChips();
+  _renderAttendStats();
+}
 
-  /* ---------- ±3 day date strip ---------- */
-  const strip = $('#dateStrip');
-  strip.innerHTML = '';
+// ─── Date strip (last 7 days) ─────────────────────────────────────────────
 
+function _renderDateStrip() {
+  const strip = document.getElementById('dateStrip');
+  if (!strip) return;
   const today = new Date();
-  for (let i = -3; i <= 3; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
-    const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+  let html = '';
+  for (let i = 6; i >= 0; i--) {
+    const d   = new Date(today);
+    d.setDate(today.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const num = d.getDate();
+    const active = iso === _attendDate ? ' active' : '';
+    html += `<button class="date-chip${active}" onclick="selectAttendDate('${iso}')">${day}<span>${num}</span></button>`;
+  }
+  strip.innerHTML = html;
+}
 
-    const cell = el('div', {
-      class:
-        'date-cell' +
-        (i === 0 ? ' today' : '') +
-        (dateStr === f.attendDate ? ' selected' : ''),
-      onclick: () => {
-        haptic('selection');
-        f.attendDate  = dateStr;
-        f.attendDraft = {};   // reset unsaved edits on date change
-        renderAttendance();
-      }
-    },
-      el('div', { class: 'dow' }, dow),
-      el('div', { class: 'day' }, String(d.getDate()))
-    );
-    strip.appendChild(cell);
+window.selectAttendDate = function(iso) {
+  _attendDate  = iso;
+  _attendMarks = {};
+  _renderDateStrip();
+  if (_attendClass) _renderAttendGrid(_attendClass);
+};
+
+// ─── Class chips ──────────────────────────────────────────────────────────
+
+function _renderAttendClassChips() {
+  const el = document.getElementById('attendClassChips');
+  if (!el) return;
+
+  const classes = [...new Set(
+    window.APP.students
+      .filter(s => s.status === 'Active')
+      .map(s => s.class).filter(Boolean)
+  )].sort();
+
+  if (!classes.length) {
+    el.innerHTML = '<span class="chip-empty">No classes — add students first</span>';
+    return;
   }
 
-  /* ---------- Class chips ---------- */
-  const classes = getClasses();
-  if (!f.attendClass && classes[0]) f.attendClass = classes[0];
+  if (!_attendClass) _attendClass = classes[0];
 
-  const chipsRow = $('#attendClassChips');
-  chipsRow.innerHTML = '';
-  classes.forEach(cls => {
-    chipsRow.appendChild(makeChip(
-      cls,
-      cls,
-      students.filter(s => s.class === cls).length,
-      f.attendClass === cls,
-      () => {
-        f.attendClass = cls;
-        f.attendDraft = {};   // reset unsaved edits on class change
-        renderAttendance();
-      }
-    ));
+  el.innerHTML = classes.map(c => `
+    <button class="chip${c === _attendClass ? ' active' : ''}" onclick="selectAttendClass('${c}')">
+      ${c}
+    </button>
+  `).join('');
+
+  _renderAttendGrid(_attendClass);
+}
+
+window.selectAttendClass = function(cls) {
+  _attendClass = cls;
+  _attendMarks = {};
+  document.querySelectorAll('#attendClassChips .chip').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === cls);
   });
+  _renderAttendGrid(cls);
+};
 
-  /* ---------- Students in selected class ---------- */
-  const classStudents = students.filter(s => s.class === f.attendClass);
+// ─── Attendance grid ──────────────────────────────────────────────────────
 
-  /* ---------- Pre-fill from existing attendance ---------- */
-  // Build effective draft: saved marks for this date, overlaid with any
-  // unsaved edits the teacher made in attendDraft.
-  const existing = State.attendance.filter(a => a.date === f.attendDate);
-  const draftMap = { ...f.attendDraft };
-  existing.forEach(a => {
-    if (!(a.student_id in draftMap)) draftMap[a.student_id] = a.status;
-  });
+function _renderAttendGrid(cls) {
+  const el = document.getElementById('attendList');
+  if (!el) return;
 
-  /* ---------- Stats ---------- */
-  const counts = { P: 0, A: 0, L: 0, T: 0 };
-  classStudents.forEach(s => {
-    const st = draftMap[s.student_id];
-    if (st) counts[st] = (counts[st] || 0) + 1;
-  });
-  const marked = counts.P + counts.A + counts.L + counts.T;
+  const students = window.APP.students.filter(s => s.class === cls && s.status === 'Active');
+  if (!students.length) {
+    el.innerHTML = emptyState('📋', `No active students in ${cls}`);
+    return;
+  }
 
-  const stats = $('#attendStats');
-  stats.innerHTML = '';
-  stats.append(
-    statCard(counts.P, 'Present'),
-    statCard(counts.A, 'Absent'),
-    statCard(`${marked}/${classStudents.length}`, 'Marked', true)
+  // Pre-fill marks from existing attendance data
+  const existing = window.APP.attendance.filter(
+    a => a.class === cls && a.date === _attendDate
   );
+  existing.forEach(a => { _attendMarks[a.student_id] = a.status; });
 
-  /* ---------- Subtitle ---------- */
-  $('#attendSubtitle').textContent =
-    `${formatDate(f.attendDate)} • ${f.attendClass || '—'}`;
+  const codes = window.APP.config?.attendance_codes || [
+    { code: 'P', label: 'Present', color: '#10B981' },
+    { code: 'A', label: 'Absent',  color: '#EF4444' },
+    { code: 'L', label: 'Leave',   color: '#3B82F6' },
+    { code: 'T', label: 'Tardy',   color: '#F59E0B' },
+    { code: 'S', label: 'Sick',    color: '#EF4444' },
+  ];
 
-  /* ---------- Per-student rows with pills ---------- */
-  const list = $('#attendList');
-  list.innerHTML = '';
+  el.innerHTML = students.map(s => {
+    const current = _attendMarks[s.student_id] || 'P';
+    const btns = codes.map(c => {
+      const sel = c.code === current ? ' sel' : '';
+      return `<button class="att-code${sel}" style="--att-color:${c.color}"
+        onclick="markAttend('${s.student_id}','${c.code}')" title="${c.label}">${c.code}</button>`;
+    }).join('');
 
-  if (!classStudents.length) {
-    list.appendChild(emptyState(
-      'No students',
-      'Pick a different class above.',
-      '👥'
-    ));
-    return;
-  }
+    return `
+      <div class="attend-row" id="arow-${s.student_id}">
+        <div class="attend-name">
+          <span class="att-avatar">${(s.name_en||'?')[0]}</span>
+          <span>${s.name_en || s.name_local || s.student_id}</span>
+        </div>
+        <div class="att-codes">${btns}</div>
+      </div>`;
+  }).join('');
 
-  classStudents.forEach(s => {
-    const current = draftMap[s.student_id] || '';
-    const row = el('div', { class: 'attend-row' },
-      el('div', { class: 'avatar ' + houseClass(s.house_color) },
-        initials(s.name_en || s.name_mm)
-      ),
-      el('div', { class: 'info' },
-        el('div', { class: 'name'  }, s.name_en || s.name_mm || s.student_id),
-        el('div', { class: 'class' },
-          s.name_mm && s.name_en ? s.name_mm : (s.student_id || '')
-        )
-      ),
-      buildPills(s.student_id, current, (status) => {
-        f.attendDraft[s.student_id] = status;
-        haptic('selection');
-        renderAttendance();
-      })
-    );
-    list.appendChild(row);
-  });
+  _renderAttendStats();
 }
 
-/* ============================================================
-   STATUS PILLS  (Present / Absent / Leave / Tardy)
-   ============================================================ */
+window.markAttend = function(studentId, code) {
+  _attendMarks[studentId] = code;
 
-/**
- * Build the P/A/L/T pill group for one student row.
- * The active pill is colored according to its status:
- *   P = green, A = red, L = blue, T = brand (amber)
- */
-function buildPills(sid, current, onPick) {
-  const wrap  = el('div', { class: 'status-pills' });
-  const codes = ['P', 'A', 'L', 'T'];
-  const aria  = { P: 'Present', A: 'Absent', L: 'Leave', T: 'Tardy' };
+  // Update button visuals
+  const row = document.getElementById(`arow-${studentId}`);
+  if (row) {
+    row.querySelectorAll('.att-code').forEach(b => {
+      b.classList.toggle('sel', b.textContent === code);
+    });
+  }
+  _renderAttendStats();
+};
 
-  codes.forEach(st => {
-    wrap.appendChild(el('button', {
-      class:        'pill' + (current === st ? ' active' : ''),
-      data:         { status: st },
-      onclick:      () => onPick(st),
-      'aria-label': aria[st]
-    }, st));
-  });
+// ─── Stats bar ─────────────────────────────────────────────────────────────
 
-  return wrap;
+function _renderAttendStats() {
+  const el = document.getElementById('attendStats');
+  if (!el || !_attendClass) return;
+
+  const students = window.APP.students.filter(s => s.class === _attendClass && s.status === 'Active');
+  const total = students.length;
+  const marked = Object.keys(_attendMarks).length;
+  const present = Object.values(_attendMarks).filter(v => v === 'P').length;
+  const absent  = Object.values(_attendMarks).filter(v => ['A', 'S'].includes(v)).length;
+
+  el.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-num">${total}</div>
+      <div class="stat-lbl">Total</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-num">${present}</div>
+      <div class="stat-lbl">Present</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-num">${absent}</div>
+      <div class="stat-lbl">Absent</div>
+    </div>
+    <div class="stat-card muted">
+      <div class="stat-num">${marked}/${total}</div>
+      <div class="stat-lbl">Marked</div>
+    </div>
+  `;
 }
 
-/* ============================================================
-   SAVE ATTENDANCE  (batch upsert through writeAction)
-   ============================================================ */
+// ─── Save attendance ──────────────────────────────────────────────────────
 
-/**
- * Save all unsaved marks for the selected date.
- * Calls writeAction('save_attendance') which routes through the
- * n8n webhook (or falls back to direct Supabase upsert).
- *
- * On success, optimistically merges records into State.attendance
- * so the UI updates immediately.
- */
-async function saveAttendance() {
-  const f = State.filters;
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btnSaveAttendance');
+  if (!btn) return;
 
-  /* ---------- Build records array ---------- */
-  const records = Object.entries(f.attendDraft).map(([sid, status]) => {
-    const s = State.students.find(x => x.student_id === sid);
-    return {
-      date:         f.attendDate,
-      day_of_week:  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(f.attendDate).getDay()],
-      student_id:   sid,
-      name_en:      s?.name_en || '',
-      class:        s?.class || f.attendClass,
-      status:       status,
-      teacher_id:   State.user.id || 'T001'
-    };
-  });
+  btn.addEventListener('click', async () => {
+    if (!_attendClass) { showToast('Select a class first'); return; }
 
-  if (!records.length) {
-    showToast('Nothing to save', 'error');
-    haptic('error');
-    return;
-  }
+    const students = window.APP.students.filter(s => s.class === _attendClass && s.status === 'Active');
+    if (!students.length) { showToast('No students in this class'); return; }
 
-  showToast('Saving…');
+    // Build records — default unmarked to 'P'
+    const records = students.map(s => ({
+      student_id: s.student_id,
+      status:     _attendMarks[s.student_id] || 'P',
+    }));
 
-  try {
-    const r = await writeAction('save_attendance', { records });
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
 
-    if (r.ok) {
-      showToast(`✓ Saved ${records.length} records`, 'success');
-      haptic('success');
+    try {
+      await API.saveAttendance(_attendClass, _attendDate, records);
 
-      /* ---------- Optimistic local merge ---------- */
-      records.forEach(rec => {
-        const idx = State.attendance.findIndex(a =>
-          a.date === rec.date && a.student_id === rec.student_id
-        );
-        if (idx >= 0) State.attendance[idx] = rec;
-        else          State.attendance.push(rec);
-      });
+      // Update local cache
+      const existing = window.APP.attendance.filter(
+        a => !(a.class === _attendClass && a.date === _attendDate)
+      );
+      const newRows = records.map(r => ({
+        ...r,
+        class:      _attendClass,
+        date:       _attendDate,
+        school_id:  window.APP.school_id,
+        teacher_id: window.APP.teacher_id,
+      }));
+      window.APP.attendance = [...existing, ...newRows];
 
-      f.attendDraft = {};
-      renderAttendance();
-    } else {
-      throw new Error(r.error || 'unknown error');
+      showToast(`✓ Attendance saved for ${_attendClass} — ${_attendDate}`);
+      _renderAttendStats();
+
+      if (window.APP.tg?.HapticFeedback) {
+        window.APP.tg.HapticFeedback.notificationOccurred('success');
+      }
+    } catch (e) {
+      showToast('Save failed: ' + (e.message || 'Network error'));
+      if (window.APP.tg?.HapticFeedback) {
+        window.APP.tg.HapticFeedback.notificationOccurred('error');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;vertical-align:-2px">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+      </svg>Save Attendance`;
     }
-  } catch (e) {
-    console.error('saveAttendance error:', e);
-    showToast('Save failed', 'error');
-    haptic('error');
-  }
-}
+  });
+});
