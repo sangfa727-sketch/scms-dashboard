@@ -1,213 +1,316 @@
-/* ============================================================
-   SCMS v10 — 04_students.js
-   Students page: filterable list grouped by class, search,
-   class chips with counts, and a detail bottom-sheet with
-   quick-action buttons (Daily Report / Attendance / Message / Incident).
-   ============================================================ */
-
-/* ============================================================
-   PAGE: STUDENTS
-   ============================================================ */
-
 /**
- * Re-render the students page from State.
- * Called by switchPage('students') and after data changes.
+ * SCMS v10.2 — 04_students.js
+ * Student roster: list, search, filter by class, add new student modal.
  */
+
+'use strict';
+
+let _stuClass  = 'All';
+let _stuSearch = '';
+
 function renderStudents() {
-  const { students } = State;
-  const f = State.filters.students;
+  _renderStudentStats();
+  _renderClassChips();
+  _renderStudentList();
+}
 
-  /* ---------- Subtitle ---------- */
-  $('#studentsSubtitle').textContent = students.length
-    ? `${students.length} students • Tap any card for details.`
-    : 'No students loaded.';
+// ─── Stats ────────────────────────────────────────────────────────────────
 
-  /* ---------- Stat cards ---------- */
-  const classes = getClasses();
-  const houses  = students.filter(s => s.house_color).length;
+function _renderStudentStats() {
+  const el = document.getElementById('studentStats');
+  if (!el) return;
 
-  const stats = $('#studentStats');
-  stats.innerHTML = '';
-  stats.append(
-    statCard(students.length, 'Students', true),
-    statCard(classes.length,  'Classes'),
-    statCard(houses,          'Housed')
+  const active   = window.APP.students.filter(s => s.status === 'Active').length;
+  const classes  = new Set(window.APP.students.map(s => s.class).filter(Boolean)).size;
+  const today    = new Date().toISOString().slice(0, 10);
+  const presents = window.APP.attendance.filter(a => a.date === today && a.status === 'P').length;
+
+  el.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-num">${active}</div>
+      <div class="stat-lbl">Students</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${classes}</div>
+      <div class="stat-lbl">Classes</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-num">${presents}</div>
+      <div class="stat-lbl">Here today</div>
+    </div>
+  `;
+
+  const subtitle = document.getElementById('studentsSubtitle');
+  if (subtitle) subtitle.textContent = `${active} active students across ${classes} class${classes !== 1 ? 'es' : ''}`;
+}
+
+// ─── Class filter chips ────────────────────────────────────────────────────
+
+function _renderClassChips() {
+  const el = document.getElementById('classChips');
+  if (!el) return;
+
+  const classes = ['All', ...[...new Set(
+    window.APP.students.filter(s => s.status === 'Active').map(s => s.class).filter(Boolean)
+  )].sort()];
+
+  el.innerHTML = classes.map(c =>
+    `<button class="chip${c === _stuClass ? ' active' : ''}" onclick="filterStuClass('${c}')">${c}</button>`
+  ).join('');
+}
+
+window.filterStuClass = function(cls) {
+  _stuClass = cls;
+  document.querySelectorAll('#classChips .chip').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === cls)
   );
+  _renderStudentList();
+};
 
-  /* ---------- Class chips ---------- */
-  const chipsRow = $('#classChips');
-  chipsRow.innerHTML = '';
+// ─── Search ────────────────────────────────────────────────────────────────
 
-  const counts = {};
-  students.forEach(s => {
-    counts[s.class] = (counts[s.class] || 0) + 1;
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('studentSearchInput');
+  const clear = document.getElementById('studentSearchClear');
+  if (!input) return;
+
+  input.addEventListener('input', () => {
+    _stuSearch = input.value.trim().toLowerCase();
+    clear.style.display = _stuSearch ? 'flex' : 'none';
+    _renderStudentList();
   });
 
-  chipsRow.appendChild(
-    makeChip('ALL', 'All', students.length, f.class === 'ALL', () => {
-      f.class = 'ALL';
-      renderStudents();
-    })
-  );
-  classes.forEach(cls => {
-    chipsRow.appendChild(
-      makeChip(cls, cls, counts[cls], f.class === cls, () => {
-        f.class = cls;
-        renderStudents();
-      })
-    );
+  clear.addEventListener('click', () => {
+    input.value = '';
+    _stuSearch  = '';
+    clear.style.display = 'none';
+    _renderStudentList();
   });
+});
 
-  /* ---------- Apply filters ---------- */
-  let filtered = students;
-  if (f.class !== 'ALL') {
-    filtered = filtered.filter(s => s.class === f.class);
+// ─── Student list ──────────────────────────────────────────────────────────
+
+function _renderStudentList() {
+  const el = document.getElementById('studentList');
+  if (!el) return;
+
+  let list = window.APP.students.filter(s => s.status === 'Active');
+
+  if (_stuClass !== 'All') {
+    list = list.filter(s => s.class === _stuClass);
   }
-  if (f.search) {
-    const q = f.search.toLowerCase().trim();
-    filtered = filtered.filter(s =>
-      String(s.name_en    || '').toLowerCase().includes(q) ||
-      String(s.name_mm    || '').toLowerCase().includes(q) ||
-      String(s.class      || '').toLowerCase().includes(q) ||
-      String(s.student_id || '').toLowerCase().includes(q)
+  if (_stuSearch) {
+    list = list.filter(s =>
+      (s.name_en    || '').toLowerCase().includes(_stuSearch) ||
+      (s.name_local || '').toLowerCase().includes(_stuSearch) ||
+      (s.student_id || '').toLowerCase().includes(_stuSearch) ||
+      (s.class      || '').toLowerCase().includes(_stuSearch)
     );
   }
 
-  /* ---------- Render list ---------- */
-  const list = $('#studentList');
-  list.innerHTML = '';
-
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No students found',
-      'Try a different filter or search term.',
-      '👀'
-    ));
+  if (!list.length) {
+    el.innerHTML = emptyState('👥', 'No students found',
+      _stuSearch ? 'Try a different search term' : 'Tap + to add a student');
     return;
   }
 
-  // Group by class within the filtered set
-  const grouped = {};
-  filtered.forEach(s => {
-    const k = s.class || 'Unassigned';
-    (grouped[k] ||= []).push(s);
-  });
+  const today = new Date().toISOString().slice(0, 10);
 
-  Object.keys(grouped).sort().forEach(cls => {
-    list.appendChild(el('div', { class: 'group-header' },
-      el('div', { class: 'group-title' },
-        el('div', { class: 'swatch' }),
-        cls
-      ),
-      el('div', { class: 'group-count' }, String(grouped[cls].length))
-    ));
+  el.innerHTML = list.map(s => {
+    const att = window.APP.attendance.find(
+      a => a.date === today && a.student_id === s.student_id
+    );
+    const attCode  = att?.status || '—';
+    const codes    = window.APP.config?.attendance_codes || [];
+    const codeInfo = codes.find(c => c.code === attCode);
+    const attColor = codeInfo?.color || '#999';
+    const attLabel = codeInfo?.label || 'Not marked';
 
-    const cardWrap = el('div', { class: 'student-list' });
-    grouped[cls].forEach(s => cardWrap.appendChild(studentCard(s)));
-    list.appendChild(cardWrap);
-  });
+    return `
+      <div class="list-card" onclick="openStudentDetail('${s.student_id}')">
+        <div class="card-row">
+          <div class="card-avatar" style="background:${_classColor(s.class)}">${(s.name_en||'?')[0]}</div>
+          <div class="card-info">
+            <div class="card-name">${s.name_en || s.name_local || s.student_id}</div>
+            <div class="card-sub">
+              <span class="class-tag">${s.class || '—'}</span>
+              ${s.name_local && s.name_local !== s.name_en
+                ? `<span class="name-local">${s.name_local}</span>` : ''}
+            </div>
+          </div>
+          <span class="att-pill" style="--pill-color:${attColor}" title="${attLabel}">${attCode}</span>
+        </div>
+        ${s.parent_name ? `<div class="card-parent">👤 ${s.parent_name}${s.parent_phone ? ' · ' + s.parent_phone : ''}</div>` : ''}
+      </div>`;
+  }).join('');
 }
 
-/* ============================================================
-   STUDENT CARD
-   ============================================================ */
-
-/**
- * Build a single student card.
- * Tapping it opens the detail sheet.
- */
-function studentCard(s) {
-  return el('div', {
-    class: 'student-card',
-    onclick: () => openStudentDetail(s)
-  },
-    el('div', { class: 'avatar ' + houseClass(s.house_color) },
-      initials(s.name_en || s.name_mm)
-    ),
-    el('div', { class: 'info' },
-      el('div', { class: 'name' }, s.name_en || s.name_mm || 'Unnamed'),
-      el('div', { class: 'name-mm' },
-        s.name_mm && s.name_en ? s.name_mm : (s.student_id || '')
-      )
-    ),
-    el('div', { class: 'badges' },
-      el('span', { class: 'tag' }, s.class || '—')
-    )
-  );
+function _classColor(cls) {
+  const colors = ['#4F46E5','#0891B2','#059669','#D97706','#DC2626','#7C3AED','#DB2777'];
+  if (!cls) return colors[0];
+  return colors[cls.charCodeAt(0) % colors.length];
 }
 
-/* ============================================================
-   STUDENT DETAIL SHEET
-   ============================================================ */
+// ─── Student detail ────────────────────────────────────────────────────────
 
-/**
- * Open a bottom sheet showing the student's profile and
- * quick-action buttons for Daily / Attendance / Message / Incident.
- */
-function openStudentDetail(s) {
-  const body = el('div', {});
+window.openStudentDetail = function(studentId) {
+  const s = window.APP.students.find(x => x.student_id === studentId);
+  if (!s) return;
 
-  /* ---------- Hero (avatar + name + tags) ---------- */
-  body.appendChild(el('div', { class: 'detail-hero' },
-    el('div', { class: 'avatar ' + houseClass(s.house_color) },
-      initials(s.name_en || s.name_mm)
-    ),
-    el('div', { class: 'info' },
-      el('div', { class: 'name-en' }, s.name_en || 'Unnamed'),
-      s.name_mm ? el('div', { class: 'name-mm' }, s.name_mm) : null,
-      el('div', { class: 'meta-tags' },
-        el('span', { class: 'tag' }, s.class || '—'),
-        s.grade        ? el('span', { class: 'tag gray' }, s.grade)       : null,
-        s.gender       ? el('span', { class: 'tag gray' }, s.gender)      : null,
-        s.house_color  ? el('span', { class: 'tag gray' }, s.house_color) : null
-      )
-    )
-  ));
+  const reports  = window.APP.dailyReports.filter(r => r.student_id === studentId).slice(0, 5);
+  const incidents = window.APP.incidents.filter(i => i.student_id === studentId).slice(0, 3);
 
-  /* ---------- Info grid ---------- */
-  const grid = el('div', { class: 'detail-grid' });
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <div class="detail-header">
+        <div class="detail-avatar" style="background:${_classColor(s.class)}">${(s.name_en||'?')[0]}</div>
+        <div>
+          <h3 class="modal-title mb0">${s.name_en || s.name_local}</h3>
+          ${s.name_local && s.name_local !== s.name_en ? `<div class="detail-local">${s.name_local}</div>` : ''}
+          <div class="detail-meta">
+            <span class="class-tag">${s.class}</span>
+            <span class="id-tag">${s.student_id}</span>
+          </div>
+        </div>
+      </div>
 
-  const items = [
-    { label: 'Student ID',     value: s.student_id,                  mono: true        },
-    { label: 'Date of Birth',  value: formatDate(s.date_of_birth)                      },
-    { label: 'Enrolled',       value: formatDate(s.enrollment_date)                    },
-    { label: 'Status',         value: s.status || '—'                                  },
-    { label: 'Parent',         value: s.parent_name,                                 full: true },
-    { label: 'Phone',          value: s.parent_phone                                   },
-    { label: 'Phone 2',        value: s.parent_phone2 || '—'                           },
-    { label: 'Email',          value: s.parent_email  || '—',                       full: true },
-    { label: 'Parent TG ID',   value: s.parent_tg_id  || '—',          mono: true, full: true }
-  ];
+      <div class="detail-grid">
+        ${_detailRow('Gender', s.gender || '—')}
+        ${_detailRow('Grade',  s.grade  || '—')}
+        ${_detailRow('Parent', s.parent_name  || '—')}
+        ${_detailRow('Phone',  s.parent_phone || '—')}
+        ${_detailRow('Telegram', s.parent_tg_id || '—')}
+      </div>
 
-  items.forEach(it => {
-    if (it.value == null || it.value === '') return;
-    grid.appendChild(el('div', { class: 'detail-item' + (it.full ? ' full' : '') },
-      el('div', { class: 'label' }, it.label),
-      el('div', { class: 'value' + (it.mono ? ' mono' : '') }, String(it.value))
-    ));
-  });
-  body.appendChild(grid);
+      ${reports.length ? `
+        <div class="detail-section">Recent reports</div>
+        ${reports.map(r => `
+          <div class="mini-card">${r.date} · ${r.mood || '—'} · Meal: ${r.meal || '—'}</div>`).join('')}
+      ` : ''}
 
-  /* ---------- Action buttons ---------- */
-  body.appendChild(el('div', { class: 'action-row' },
-    actionBtn('Daily Report', icon('clipboard'), () => {
-      closeSheet();
-      openDailyReportForm(s);
-    }),
-    actionBtn('Mark Attendance', icon('check'), () => {
-      closeSheet();
-      State.filters.attendClass = s.class;
-      switchPage('attend');
-    }),
-    actionBtn('Send Parent', icon('msg'), () => {
-      closeSheet();
-      openParentMessageForm(s);
-    }),
-    actionBtn('Add Incident', icon('alert'), () => {
-      closeSheet();
-      openIncidentForm(s);
-    })
-  ));
+      ${incidents.length ? `
+        <div class="detail-section">Recent incidents</div>
+        ${incidents.map(i => `
+          <div class="mini-card incident-card">${i.date} · ${i.type} · ${i.severity}</div>`).join('')}
+      ` : ''}
 
-  openSheet(s.name_en || 'Student', body);
+      <button class="btn-secondary mt16" onclick="closeModal()">Close</button>
+    </div>`;
+
+  openModal(html);
+};
+
+function _detailRow(label, value) {
+  return `<div class="detail-row"><span class="detail-lbl">${label}</span><span class="detail-val">${value}</span></div>`;
 }
+
+// ─── Add student modal ────────────────────────────────────────────────────
+
+window.openAddStudentModal = function() {
+  const grades  = window.APP.config?.grades  || ['KG','P1','P2','P3','P4','P5','P6'];
+  const classes = [...new Set(window.APP.students.map(s => s.class).filter(Boolean))].sort();
+
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Add New Student</h3>
+
+      <label class="field-label">Local name (Myanmar / native)</label>
+      <input class="form-input" id="newStuLocal" placeholder="ကျောင်းသားနာမည်…">
+
+      <label class="field-label">English name</label>
+      <input class="form-input" id="newStuEn" placeholder="Full English name">
+
+      <label class="field-label">Class</label>
+      <input class="form-input" id="newStuClass" placeholder="e.g. P3, KG-A" list="classList">
+      <datalist id="classList">
+        ${classes.map(c => `<option value="${c}">`).join('')}
+      </datalist>
+
+      <label class="field-label">Grade</label>
+      <select class="form-input" id="newStuGrade">
+        ${grades.map(g => `<option>${g}</option>`).join('')}
+      </select>
+
+      <label class="field-label">Gender</label>
+      <div class="pill-group" id="genderPills">
+        <button class="pill" onclick="togglePill(this,'genderPills')">M</button>
+        <button class="pill" onclick="togglePill(this,'genderPills')">F</button>
+        <button class="pill" onclick="togglePill(this,'genderPills')">Other</button>
+      </div>
+
+      <label class="field-label">Parent name</label>
+      <input class="form-input" id="newStuParent" placeholder="Parent / guardian name">
+
+      <label class="field-label">Parent phone</label>
+      <input class="form-input" id="newStuPhone" type="tel" placeholder="+95 9 xxx xxx xxx">
+
+      <label class="field-label">Parent Telegram ID <span class="optional">(optional)</span></label>
+      <input class="form-input" id="newStuTg" placeholder="Telegram user ID number">
+
+      <button class="btn-primary mt16" id="saveStudentBtn" onclick="saveNewStudent()">
+        Register Student
+      </button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
+
+  openModal(html);
+};
+
+window.saveNewStudent = async function() {
+  const btn = document.getElementById('saveStudentBtn');
+
+  const name_local = document.getElementById('newStuLocal').value.trim();
+  const name_en    = document.getElementById('newStuEn').value.trim();
+  const cls        = document.getElementById('newStuClass').value.trim();
+  const grade      = document.getElementById('newStuGrade').value;
+  const gender     = document.querySelector('#genderPills .pill.active')?.textContent.trim() || '';
+  const parent_name  = document.getElementById('newStuParent').value.trim();
+  const parent_phone = document.getElementById('newStuPhone').value.trim();
+  const parent_tg_id = document.getElementById('newStuTg').value.trim();
+
+  if (!name_en)  { showToast('English name is required'); return; }
+  if (!cls)      { showToast('Class is required'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Registering…';
+
+  try {
+    const result = await API.registerStudent({
+      name_local:   name_local || name_en,
+      name_mm:      name_local || name_en,
+      name_en,
+      class: cls,
+      grade,
+      gender,
+      parent_name,
+      parent_phone,
+      parent_tg_id,
+      school_id:    window.APP.school_id,
+      teacher_id:   window.APP.teacher_id,
+    });
+
+    // The result from TWA should include the new student row
+    const newStudent = result?.student || result?.data || {
+      student_id: result?.student_id || 'STU-???',
+      name_en, name_local, class: cls, grade, gender,
+      parent_name, parent_phone, parent_tg_id,
+      status: 'Active', school_id: window.APP.school_id,
+    };
+
+    window.APP.students.push(newStudent);
+
+    closeModal();
+    renderStudents();
+    showToast(`✓ ${name_en} registered successfully`);
+
+    if (window.APP.tg?.HapticFeedback) {
+      window.APP.tg.HapticFeedback.notificationOccurred('success');
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Register Student';
+    showToast('Registration failed: ' + (e.message || 'Network error'));
+  }
+};
