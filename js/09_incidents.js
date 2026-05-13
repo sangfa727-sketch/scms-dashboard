@@ -1,225 +1,159 @@
-/* ============================================================
-   SCMS v10 — 09_incidents.js
-   Incidents page:
-     • Filterable list (Good Behaviour / Participation / Concern / etc.)
-     • Severity color-coding (Info=green, Medium=gray, High/Critical=red)
-     • Form sheet with type + severity + description + action taken
-   ============================================================ */
-
-/* ============================================================
-   PAGE: INCIDENTS
-   ============================================================ */
-
 /**
- * Re-render the incidents page from State.
+ * SCMS v10.2 — 09_incidents.js
+ * Incident recording: list, filter, add modal, save via n8n TWA.
  */
+
+'use strict';
+
+let _incidentType = 'All';
+
 function renderIncidents() {
-  const f     = State.filters.incidents;
-  const list  = $('#incidentList');
-  const items = State.incidents;
+  _renderIncidentTypeChips();
+  _renderIncidentList();
+}
 
-  /* ---------- Type chips ---------- */
-  const types    = [...new Set(items.map(r => r.type).filter(Boolean))];
-  const chipsRow = $('#incidentTypeChips');
-  chipsRow.innerHTML = '';
+function _renderIncidentTypeChips() {
+  const el = document.getElementById('incidentTypeChips');
+  if (!el) return;
 
-  chipsRow.appendChild(makeChip(
-    'ALL', 'All', items.length, f.type === 'ALL',
-    () => { f.type = 'ALL'; renderIncidents(); }
-  ));
+  const types = ['All', ...(window.APP.config?.incident_types ||
+    ['Good Behaviour','Participation','Achievement','Concern','Health','Other'])];
 
-  types.forEach(t => {
-    const cnt = items.filter(r => r.type === t).length;
-    chipsRow.appendChild(makeChip(
-      t, t, cnt, f.type === t,
-      () => { f.type = t; renderIncidents(); }
-    ));
-  });
+  el.innerHTML = types.map(t =>
+    `<button class="chip${t === _incidentType ? ' active' : ''}" onclick="filterIncidentType('${t}')">${t}</button>`
+  ).join('');
+}
 
-  /* ---------- Apply filter ---------- */
-  let filtered = items;
-  if (f.type !== 'ALL') {
-    filtered = filtered.filter(r => r.type === f.type);
-  }
+window.filterIncidentType = function(type) {
+  _incidentType = type;
+  document.querySelectorAll('#incidentTypeChips .chip').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === type)
+  );
+  _renderIncidentList();
+};
 
-  /* ---------- Render list ---------- */
-  list.innerHTML = '';
+function _renderIncidentList() {
+  const el = document.getElementById('incidentList');
+  if (!el) return;
 
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No incidents',
-      'Tap + to record one.',
-      '⚡'
-    ));
+  let list = [...window.APP.incidents].sort((a, b) => b.date?.localeCompare(a.date));
+  if (_incidentType !== 'All') list = list.filter(i => i.type === _incidentType);
+
+  if (!list.length) {
+    el.innerHTML = emptyState('⚡', 'No incidents recorded', 'Tap + to log one');
     return;
   }
 
-  filtered
-    .sort((a, b) =>
-      String(b.timestamp || b.date).localeCompare(String(a.timestamp || a.date))
-    )
-    .forEach(r => {
-      /* Severity color */
-      const sev = (r.severity || '').toLowerCase();
-      const sevColor =
-        sev.includes('critical') || sev.includes('high') ? 'red'  :
-        sev.includes('medium')                            ? 'gray' :
-                                                            'green';
+  const sevColor = { Info:'#6B7280', Low:'#0891B2', Medium:'#D97706', High:'#DC2626', Critical:'#7C3AED' };
+  const typeIcon  = { 'Good Behaviour':'⭐','Participation':'🙋','Achievement':'🏆','Concern':'⚠️','Health':'🏥','Other':'📋','Bullying':'🚫','Injury':'🩹' };
 
-      list.appendChild(el('div', { class: 'entry-card' },
-        el('div', { class: 'entry-meta' },
-          el('span', { class: 'tag ' + sevColor }, r.type || '—'),
-          r.severity
-            ? el('span', { class: 'tag gray' }, r.severity)
-            : null,
-          el('span', { class: 'entry-date mono' }, formatDate(r.date))
-        ),
-        el('div', { class: 'entry-title' },
-          (r.name_en || r.student_id) + ' — ' + (r.class || '')
-        ),
-        r.description
-          ? el('div', { class: 'entry-text' }, r.description)
-          : null,
-        r.action_taken
-          ? el('div', { class: 'entry-footer' },
-              el('span', {}, '🛠 ' + r.action_taken)
-            )
-          : null
-      ));
-    });
+  el.innerHTML = list.map(i => {
+    const color = sevColor[i.severity] || '#6B7280';
+    const icon  = typeIcon[i.type]     || '📋';
+
+    return `
+      <div class="list-card">
+        <div class="card-row">
+          <div class="incident-icon">${icon}</div>
+          <div class="card-info">
+            <div class="card-name">${i.name_en || i.student_id || '—'}</div>
+            <div class="card-sub">
+              ${i.type} ·
+              <span class="sev-badge" style="color:${color}">${i.severity}</span>
+              · ${i.date || '—'}
+            </div>
+          </div>
+          ${i.parent_notified ? '<span class="notif-badge" title="Parent notified">✓</span>' : ''}
+        </div>
+        ${i.description   ? `<div class="card-note">${i.description}</div>` : ''}
+        ${i.action_taken  ? `<div class="card-action">Action: ${i.action_taken}</div>` : ''}
+      </div>`;
+  }).join('');
 }
 
-/* ============================================================
-   INCIDENT FORM SHEET
-   ============================================================ */
+window.openIncidentModal = function(prefillStudent = '') {
+  const students   = window.APP.students.filter(s => s.status === 'Active');
+  const types      = window.APP.config?.incident_types ||
+    ['Good Behaviour','Participation','Achievement','Concern','Conflict','Health','Other'];
+  const severities = window.APP.config?.severities || ['Info','Low','Medium','High'];
 
-/**
- * Open the incident-form sheet.
- * If `student` is passed, that student is pre-selected.
- *
- * Saves through writeAction('save_incident') which routes
- * through n8n where high-severity records auto-notify parent.
- */
-function openIncidentForm(student = null) {
-  const studentList = State.students;
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Log Incident / Note</h3>
 
-  /* ---------- Student dropdown ---------- */
-  const studentSelect = el('select', { class: 'form-select', id: 'icStudent' });
-  studentList.forEach(s => {
-    const opt = el('option', { value: s.student_id },
-      `${s.name_en || s.name_mm} (${s.class})`
-    );
-    if (student?.student_id === s.student_id) opt.selected = true;
-    studentSelect.appendChild(opt);
-  });
+      <label class="field-label">Student</label>
+      <input class="form-input" id="incStu" placeholder="Student name or ID" list="incStudentList"
+        value="${prefillStudent}">
+      <datalist id="incStudentList">
+        ${students.map(s => `<option value="${s.name_en}">${s.name_en} (${s.class})</option>`).join('')}
+      </datalist>
 
-  /* ---------- Type dropdown ---------- */
-  const typeSelect = el('select', { class: 'form-select', id: 'icType' });
-  typeSelect.innerHTML =
-    '<option>Good Behaviour</option>' +
-    '<option>Participation</option>' +
-    '<option>Achievement</option>' +
-    '<option>Concern</option>' +
-    '<option>Conflict</option>' +
-    '<option>Health</option>' +
-    '<option>Other</option>';
+      <label class="field-label">Type</label>
+      <div class="pill-group" id="incTypePills">
+        ${types.map((t, i) => `<button class="pill ${i===0?'active':''}" onclick="togglePill(this,'incTypePills')">${t}</button>`).join('')}
+      </div>
 
-  /* ---------- Severity dropdown ---------- */
-  const sevSelect = el('select', { class: 'form-select', id: 'icSev' });
-  sevSelect.innerHTML =
-    '<option>Info</option>' +
-    '<option>Low</option>' +
-    '<option>Medium</option>' +
-    '<option>High</option>' +
-    '<option>Critical</option>';
+      <label class="field-label">Severity</label>
+      <div class="pill-group" id="incSevPills">
+        ${severities.map((s, i) => `<button class="pill ${i===0?'active':''}" onclick="togglePill(this,'incSevPills')">${s}</button>`).join('')}
+      </div>
 
-  /* ---------- Build sheet body ---------- */
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Student'),
-      studentSelect
-    ),
+      <label class="field-label">Description</label>
+      <textarea class="form-textarea" id="incDesc" rows="3" placeholder="What happened…"></textarea>
 
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Type'),
-        typeSelect
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Severity'),
-        sevSelect
-      )
-    ),
+      <label class="field-label">Action taken <span class="optional">(optional)</span></label>
+      <input class="form-input" id="incAction" placeholder="e.g. Spoke with student, sent note home…">
 
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Description ', el('span', { class: 'req' }, '*')),
-      el('textarea', {
-        class:       'form-textarea',
-        id:          'icDesc',
-        placeholder: 'What happened?'
-      })
-    ),
+      <label class="field-label toggle-row">
+        <span>Notify parent</span>
+        <input type="checkbox" id="incNotify" class="toggle-check">
+      </label>
 
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Action Taken'),
-      el('input', {
-        class:       'form-input',
-        type:        'text',
-        id:          'icAction',
-        placeholder: 'How was it handled?'
-      })
-    ),
+      <button class="btn-primary mt16" id="saveIncBtn" onclick="saveIncident()">Save</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
 
-    /* ---------- Save button ---------- */
-    el('button', {
-      class:   'btn-primary',
-      onclick: async () => {
-        const sid = studentSelect.value;
-        const s   = State.students.find(x => x.student_id === sid);
+  openModal(html);
+};
 
-        const data = {
-          timestamp:       new Date().toISOString(),
-          date:            todayISO(),
-          student_id:      sid,
-          name_en:         s?.name_en || '',
-          class:           s?.class   || '',
-          type:            $('#icType').value,
-          severity:        $('#icSev').value,
-          description:     $('#icDesc').value.trim(),
-          action_taken:    $('#icAction').value.trim(),
-          teacher_id:      State.user.id || 'T001'
-        };
+window.saveIncident = async function() {
+  const btn = document.getElementById('saveIncBtn');
+  const stuName = document.getElementById('incStu').value.trim();
 
-        /* ---------- Validation ---------- */
-        if (!data.description) {
-          showToast('Add description', 'error');
-          haptic('error');
-          return;
-        }
+  if (!stuName) { showToast('Student name is required'); return; }
 
-        showToast('Saving…');
+  btn.disabled = true; btn.textContent = 'Saving…';
 
-        try {
-          const r = await writeAction('save_incident', { data });
-          if (r.ok) {
-            showToast('✓ Incident recorded', 'success');
-            haptic('success');
-
-            /* Optimistic local insert */
-            State.incidents.unshift(data);
-            closeSheet();
-            renderIncidents();
-          } else {
-            throw new Error(r.error || 'unknown');
-          }
-        } catch (e) {
-          console.error('save incident error:', e);
-          showToast('Save failed', 'error');
-          haptic('error');
-        }
-      }
-    }, 'Save Incident')
+  const stu = window.APP.students.find(s =>
+    s.name_en?.toLowerCase() === stuName.toLowerCase() ||
+    s.student_id?.toLowerCase() === stuName.toLowerCase()
   );
 
-  openSheet('Record Incident', body);
-}
+  try {
+    const data = {
+      student_id:     stu?.student_id || stuName,
+      name_en:        stu?.name_en    || stuName,
+      class:          stu?.class      || '',
+      type:           document.querySelector('#incTypePills .pill.active')?.textContent.trim() || 'Other',
+      severity:       document.querySelector('#incSevPills .pill.active')?.textContent.trim() || 'Info',
+      description:    document.getElementById('incDesc').value.trim(),
+      action_taken:   document.getElementById('incAction').value.trim(),
+      parent_notified: document.getElementById('incNotify').checked,
+      date:           new Date().toISOString().slice(0, 10),
+      teacher_id:     window.APP.teacher_id,
+      school_id:      window.APP.school_id,
+    };
+
+    await API.saveIncident(data);
+    window.APP.incidents.unshift(data);
+
+    closeModal();
+    _renderIncidentList();
+    showToast('✓ Incident logged');
+    if (window.APP.tg?.HapticFeedback) window.APP.tg.HapticFeedback.notificationOccurred('success');
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Save';
+    showToast('Save failed: ' + (e.message || 'error'));
+  }
+};
