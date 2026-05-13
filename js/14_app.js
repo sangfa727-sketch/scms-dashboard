@@ -1,254 +1,353 @@
-/* ============================================================
-   SCMS v10 — 14_app.js
-   App entry point:
-     • switchPage()  — tab navigation between 9 pages
-     • handleFab()   — context-aware floating action button
-     • bootstrap()   — load all data from Supabase / demo
-     • showSetup() / hideSetup()  — first-run config overlay
-     • DOMContentLoaded handler that wires every button,
-       tab, search input, settings overlay, online/offline
-       events, ESC key, and Telegram BackButton.
-   ============================================================ */
-
-/* ============================================================
-   PAGE SWITCHING
-   ============================================================ */
-
 /**
- * Switch to another page. Updates the visible page section,
- * highlights the active tab, calls the correct renderer, and
- * scrolls to top.
+ * SCMS v10.2 — 14_app.js
+ * Main application entry point.
  *
- * @param {string} page  — students | attend | daily | hw |
- *                         parents | incidents | timetable |
- *                         summary | more
+ * Boot sequence:
+ *   1. Telegram.WebApp.ready() + expand
+ *   2. Extract initData / telegram_id
+ *   3. POST to n8n bootstrap webhook → rpc_bootstrap
+ *   4. Populate APP context from response
+ *   5. Init Supabase client (anon, read-only)
+ *   6. Render all modules
+ *   7. Hide boot screen, show app
  */
-function switchPage(page) {
-  State.currentPage = page;
 
-  /* ---------- Update visible page ---------- */
-  $$('.page').forEach(p => p.classList.remove('active'));
-  $('#page-' + page)?.classList.add('active');
+'use strict';
 
-  /* ---------- Update tab button highlight ---------- */
-  $$('.tab-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.page === page)
-  );
+(async function initApp() {
+  const bootStatus = document.getElementById('bootStatus');
+  const bootSub    = document.getElementById('bootSub');
+  const bootScreen = document.getElementById('bootScreen');
+  const errorScreen = document.getElementById('errorScreen');
 
-  haptic('light');
-
-  /* ---------- Call the page-specific renderer ---------- */
-  switch (page) {
-    case 'students':  renderStudents();   break;
-    case 'attend':    renderAttendance(); break;
-    case 'daily':     renderDaily();      break;
-    case 'hw':        renderHomework();   break;
-    case 'parents':   renderComms();      break;
-    case 'incidents': renderIncidents();  break;
-    case 'timetable': renderTimetable();  break;
-    case 'summary':   renderSummary();    break;
-    case 'more':      renderMore();       break;
+  function setStatus(msg, sub) {
+    if (bootStatus) bootStatus.textContent = msg;
+    if (sub && bootSub) bootSub.textContent = sub;
   }
 
-  /* ---------- Update FAB visibility & scroll to top ---------- */
-  updateFab();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  /* ---------- Telegram BackButton: hide on root, show elsewhere ---------- */
-  if (tg?.BackButton) {
-    if (page === 'students') tg.BackButton.hide();
-    else                     tg.BackButton.show();
+  function showError(title, msg) {
+    document.getElementById('errorTitle').textContent = title;
+    document.getElementById('errorMsg').textContent = msg;
+    if (bootScreen) bootScreen.style.display = 'none';
+    if (errorScreen) errorScreen.style.display = 'flex';
   }
-}
-
-/* ============================================================
-   FAB (context-aware floating action button)
-   ============================================================ */
-
-/**
- * Handle FAB tap.
- * Action depends on current page:
- *   - attend     → save attendance (commit draft)
- *   - daily      → open daily report form
- *   - hw         → open homework form
- *   - parents    → open parent message form
- *   - incidents  → open incident form
- *   - students   → open student registration form
- *   - timetable  → open add-period form
- */
-function handleFab() {
-  haptic('medium');
-  const p = State.currentPage;
-
-  switch (p) {
-    case 'attend':    saveAttendance();                 break;
-    case 'daily':     openDailyReportForm();            break;
-    case 'hw':        openHomeworkForm();               break;
-    case 'parents':   openParentMessageForm();          break;
-    case 'incidents': openIncidentForm();               break;
-    case 'students':  openStudentRegistrationForm();    break;
-    case 'timetable': openTimetableForm();              break;
-    default:
-      showToast('Use a specific tab to add', 'error');
-  }
-}
-
-/**
- * Show / hide the FAB based on the current page.
- * Hide on summary / more pages where add actions don't apply.
- */
-function updateFab() {
-  const fab = $('#fab');
-  if (!fab) return;
-  const visible = [
-    'students', 'attend', 'daily', 'hw',
-    'parents',  'incidents', 'timetable'
-  ].includes(State.currentPage);
-  fab.style.display = visible ? 'flex' : 'none';
-}
-
-/* ============================================================
-   SETUP OVERLAY (first-run config)
-   ============================================================ */
-
-/**
- * Show the setup overlay with current config values pre-filled.
- */
-function showSetup() {
-  $('#setupUrl').value     = CONFIG.SUPABASE_URL  || '';
-  $('#setupKey').value     = CONFIG.SUPABASE_ANON || '';
-  $('#setupWebhook').value = CONFIG.WEBHOOK_URL   || '';
-  $('#setupSchool').value  = CONFIG.SCHOOL_ID     || 'SCH001';
-  $('#setupOverlay').classList.add('show');
-}
-
-/** Hide the setup overlay. */
-function hideSetup() {
-  $('#setupOverlay').classList.remove('show');
-}
-
-/* ============================================================
-   BOOTSTRAP (load data and render)
-   ============================================================ */
-
-/**
- * Initialize Supabase client and load all data.
- * If no backend is configured (and not in DEMO mode), open setup.
- *
- * @param {boolean} force — true when user explicitly tapped Sync
- */
-async function bootstrap(force = false) {
-  /* ---------- First-run: open setup if unconfigured ---------- */
-  if (!CONFIG.DEMO && !CONFIG.SUPABASE_URL && !window.SCMS_SUPABASE_URL) {
-    showSetup();
-    return;
-  }
-
-  /* ---------- Init Supabase client (idempotent) ---------- */
-  initSupabase();
-
-  showToast(force ? 'Syncing…' : 'Loading…');
 
   try {
-    await loadAll();
-    if (force) showToast('✓ Synced', 'success');
-    switchPage(State.currentPage);
-  } catch (e) {
-    console.error('Bootstrap error:', e);
-    showToast('Load failed — using demo', 'error');
-    hydrateFromBootstrap({ ok: true, ...DEMO });
-    switchPage(State.currentPage);
-  }
-}
+    // ── Step 1: Telegram WebApp init ─────────────────────────────────────
+    setStatus('Opening Telegram…', 'School Class Management System');
 
-/* ============================================================
-   DOMContentLoaded — wire up the whole app
-   ============================================================ */
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.enableClosingConfirmation();
+      window.APP.tg       = tg;
+      window.APP.initData = tg.initData || '';
+      window.APP.tgUser   = tg.initDataUnsafe?.user || null;
 
-document.addEventListener('DOMContentLoaded', () => {
+      // Apply Telegram theme colors
+      if (tg.colorScheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+      if (tg.themeParams?.bg_color) {
+        document.documentElement.style.setProperty('--tg-bg', tg.themeParams.bg_color);
+      }
+    }
 
-  /* ---------- Tab clicks ---------- */
-  $$('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchPage(btn.dataset.page));
-  });
+    const tgUser = window.APP.tgUser;
+    const telegram_id = tgUser ? String(tgUser.id) : null;
 
-  /* ---------- FAB ---------- */
-  $('#fab').addEventListener('click', handleFab);
+    // ── Step 2: Bootstrap via n8n ────────────────────────────────────────
+    setStatus('Authenticating…', telegram_id ? `User: ${tgUser.first_name}` : 'Loading…');
 
-  /* ---------- Header buttons ---------- */
-  $('#btnRefresh').addEventListener('click',  () => bootstrap(true));
-  $('#btnSettings').addEventListener('click', showSetup);
+    let bootstrapData = null;
 
-  /* ---------- Save attendance button ---------- */
-  $('#btnSaveAttendance').addEventListener('click', saveAttendance);
+    if (telegram_id && SCMS_CONFIG.N8N_BOOTSTRAP && !SCMS_CONFIG.N8N_BOOTSTRAP.includes('your-n8n')) {
+      try {
+        bootstrapData = await API.bootstrap(telegram_id);
+      } catch (e) {
+        console.warn('Bootstrap failed, trying demo mode:', e);
+      }
+    }
 
-  /* ---------- Setup overlay buttons ---------- */
-  $('#setupSaveBtn').addEventListener('click', () => {
-    const url = $('#setupUrl').value.trim();
-    const key = $('#setupKey').value.trim();
-
-    if (!url || !key) {
-      showToast('Need URL and key', 'error');
-      haptic('error');
+    if (!bootstrapData && !telegram_id) {
+      // No Telegram context at all — likely opened in browser directly
+      console.warn('No Telegram context. Running in preview mode.');
+      bootstrapData = _demoBootstrap();
+      window.APP.demo = true;
+    } else if (!bootstrapData) {
+      // Has telegram_id but bootstrap failed
+      showError('Connection failed', 'Could not reach SCMS server. Please try again.');
       return;
     }
 
-    saveConfig({
-      SUPABASE_URL:  url,
-      SUPABASE_ANON: key,
-      WEBHOOK_URL:   $('#setupWebhook').value.trim(),
-      SCHOOL_ID:     $('#setupSchool').value.trim() || 'SCH001',
-      DEMO:          false
+    if (!bootstrapData.ok) {
+      showError('Authentication failed', bootstrapData.error || 'Your account is not registered in this school.');
+      return;
+    }
+
+    // ── Step 3: Populate APP context ─────────────────────────────────────
+    setStatus('Loading school data…', bootstrapData.schoolConfig?.school_name || '');
+
+    const sc = bootstrapData.schoolConfig || {};
+    const u  = bootstrapData.user || {};
+
+    window.APP.school_id      = sc.school_id || '';
+    window.APP.school_name    = sc.school_name || 'SCMS';
+    window.APP.teacher_id     = u.teacher_id || '';
+    window.APP.teacher_name   = u.teacher_name || tgUser?.first_name || '';
+    window.APP.teacher_role   = u.role || '';
+    window.APP.teacher_classes = u.classes || '';
+    window.APP.is_admin       = ['Admin', 'Principal', 'HT'].includes(u.role);
+    window.APP.config         = bootstrapData.config || {};
+    window.APP.currentTerm    = bootstrapData.currentTerm || null;
+
+    // Cache data from bootstrap (30 days window)
+    window.APP.students       = bootstrapData.students       || [];
+    window.APP.attendance     = bootstrapData.attendance     || [];
+    window.APP.dailyReports   = bootstrapData.dailyReports   || [];
+    window.APP.homework       = bootstrapData.homework       || [];
+    window.APP.parentComms    = bootstrapData.parentComms    || [];
+    window.APP.incidents      = bootstrapData.incidents      || [];
+    window.APP.timetable      = bootstrapData.timetable      || [];
+    window.APP.subjects       = bootstrapData.subjects       || [];
+    window.APP.terms          = bootstrapData.terms          || [];
+    window.APP.monthlySummary = bootstrapData.monthlySummary || [];
+
+    window.APP.ready = true;
+
+    // ── Step 4: Init Supabase client ─────────────────────────────────────
+    if (window.supabase && SCMS_CONFIG.SUPABASE_URL && SCMS_CONFIG.SUPABASE_ANON &&
+        !SCMS_CONFIG.SUPABASE_ANON.includes('PLACEHOLDER')) {
+      window.APP.supabase = window.supabase.createClient(
+        SCMS_CONFIG.SUPABASE_URL,
+        SCMS_CONFIG.SUPABASE_ANON
+      );
+    }
+
+    // ── Step 5: Update header UI ─────────────────────────────────────────
+    document.getElementById('schoolName').textContent = window.APP.school_name;
+    document.getElementById('userName').textContent   = window.APP.teacher_name;
+    document.getElementById('userRole').textContent   = window.APP.teacher_role || '—';
+    document.getElementById('connDot').classList.add('online');
+
+    // ── Step 6: Render modules ───────────────────────────────────────────
+    setStatus('Building dashboard…', '');
+
+    if (typeof renderStudents  === 'function') renderStudents();
+    if (typeof renderAttendance === 'function') renderAttendance();
+    if (typeof renderDaily     === 'function') renderDaily();
+    if (typeof renderHomework  === 'function') renderHomework();
+    if (typeof renderComms     === 'function') renderComms();
+    if (typeof renderIncidents === 'function') renderIncidents();
+    if (typeof renderTimetable === 'function') renderTimetable();
+    if (typeof renderSummary   === 'function') renderSummary();
+    if (typeof renderMore      === 'function') renderMore();
+
+    // Tab bar navigation
+    _initTabBar();
+
+    // FAB
+    _initFab();
+
+    // Refresh button
+    document.getElementById('btnRefresh').addEventListener('click', async () => {
+      showToast('Refreshing…');
+      try {
+        await API.refreshAll();
+        if (typeof renderStudents  === 'function') renderStudents();
+        if (typeof renderAttendance === 'function') renderAttendance();
+        if (typeof renderDaily     === 'function') renderDaily();
+        if (typeof renderHomework  === 'function') renderHomework();
+        showToast('✓ Data updated');
+      } catch (e) {
+        showToast('Refresh failed — check connection');
+      }
     });
 
-    hideSetup();
-    bootstrap(true);
-  });
+    // ── Step 7: Hide boot screen ─────────────────────────────────────────
+    setTimeout(() => {
+      if (bootScreen) {
+        bootScreen.classList.add('fade-out');
+        setTimeout(() => { bootScreen.style.display = 'none'; }, 350);
+      }
+    }, 400);
 
-  $('#setupDemoBtn').addEventListener('click', () => {
-    saveConfig({ DEMO: true });
-    hideSetup();
-    bootstrap(true);
-  });
+    // Online/offline detection
+    window.addEventListener('online',  () => {
+      document.getElementById('offlineBanner').style.display = 'none';
+      document.getElementById('connDot').classList.add('online');
+    });
+    window.addEventListener('offline', () => {
+      document.getElementById('offlineBanner').style.display = 'flex';
+      document.getElementById('connDot').classList.remove('online');
+    });
 
-  /* ---------- Student search input ---------- */
-  const searchInput = $('#studentSearchInput');
-  searchInput.addEventListener('input', (e) => {
-    State.filters.students.search = e.target.value;
-    $('#studentSearch').classList.toggle('has-value', !!e.target.value);
-    renderStudents();
-  });
+    if (!navigator.onLine) {
+      document.getElementById('offlineBanner').style.display = 'flex';
+    }
 
-  /* ---------- Search clear button ---------- */
-  $('#studentSearchClear').addEventListener('click', () => {
-    searchInput.value = '';
-    State.filters.students.search = '';
-    $('#studentSearch').classList.remove('has-value');
-    renderStudents();
-    haptic('selection');
-  });
-
-  /* ---------- Header scroll shadow ---------- */
-  window.addEventListener('scroll', () => {
-    $('#appHeader').classList.toggle('scrolled', window.scrollY > 4);
-  }, { passive: true });
-
-  /* ---------- Online / offline state ---------- */
-  window.addEventListener('online',  () => document.body.classList.remove('offline'));
-  window.addEventListener('offline', () => document.body.classList.add('offline'));
-  if (!navigator.onLine) document.body.classList.add('offline');
-
-  /* ---------- ESC closes any open sheet ---------- */
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSheet();
-  });
-
-  /* ---------- Telegram BackButton handler ---------- */
-  if (tg?.BackButton) {
-    tg.BackButton.onClick(() => switchPage('students'));
+  } catch (err) {
+    console.error('App init error:', err);
+    showError('Startup error', err.message || 'Unknown error. Please reload.');
   }
+})();
 
-  /* ---------- Initial UI state + load ---------- */
-  updateFab();
-  bootstrap();
-});
+// ─── TAB BAR ────────────────────────────────────────────────────────────────
+
+function _initTabBar() {
+  const tabs  = document.querySelectorAll('.tab-btn');
+  const pages = document.querySelectorAll('.page');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.page;
+      tabs.forEach(t => t.classList.remove('active'));
+      pages.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const pg = document.getElementById(`page-${target}`);
+      if (pg) pg.classList.add('active');
+
+      // Haptic feedback
+      if (window.APP.tg?.HapticFeedback) {
+        window.APP.tg.HapticFeedback.selectionChanged();
+      }
+    });
+  });
+}
+
+// ─── FAB (Floating Action Button) ───────────────────────────────────────────
+
+function _initFab() {
+  const fab = document.getElementById('fab');
+  if (!fab) return;
+
+  fab.addEventListener('click', () => {
+    // Determine context from active page
+    const activePage = document.querySelector('.page.active');
+    const pageId = activePage?.id?.replace('page-', '') || 'students';
+
+    const actions = {
+      students:   () => typeof openAddStudentModal  === 'function' && openAddStudentModal(),
+      attend:     () => showToast('Use the attendance grid below ↓'),
+      daily:      () => typeof openDailyReportModal === 'function' && openDailyReportModal(),
+      hw:         () => typeof openHomeworkModal    === 'function' && openHomeworkModal(),
+      incidents:  () => typeof openIncidentModal    === 'function' && openIncidentModal(),
+      parents:    () => typeof openParentCommModal  === 'function' && openParentCommModal(),
+      timetable:  () => showToast('Timetable managed by admin'),
+      summary:    () => showToast('Summary auto-generated monthly'),
+      more:       () => {},
+    };
+
+    const action = actions[pageId];
+    if (action) action();
+    else showToast('Tap + to add a new entry');
+
+    if (window.APP.tg?.HapticFeedback) {
+      window.APP.tg.HapticFeedback.impactOccurred('light');
+    }
+  });
+}
+
+// ─── DEMO BOOTSTRAP (browser preview without Telegram) ──────────────────────
+
+function _demoBootstrap() {
+  return {
+    ok: true,
+    schoolConfig: {
+      school_id:    'SCH-DEMO',
+      school_name:  'Demo International School',
+      country:      'Myanmar',
+      timezone:     'Asia/Yangon',
+    },
+    config: {
+      subjects:         ['Mathematics', 'English', 'Science', 'Social Studies', 'Art', 'Music', 'PE'],
+      attendance_codes: [
+        { code: 'P', label: 'Present', color: '#10B981' },
+        { code: 'A', label: 'Absent',  color: '#EF4444' },
+        { code: 'L', label: 'Leave',   color: '#3B82F6' },
+        { code: 'T', label: 'Tardy',   color: '#F59E0B' },
+        { code: 'S', label: 'Sick',    color: '#EF4444' },
+      ],
+      incident_types:   ['Good Behaviour', 'Participation', 'Achievement', 'Concern', 'Health', 'Other'],
+      severities:       ['Info', 'Low', 'Medium', 'High'],
+      grades:           ['KG', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6'],
+    },
+    currentTerm: { term_name: 'Term 1 2024-25', start_date: '2024-09-01', end_date: '2024-12-20', is_current: true },
+    user: {
+      teacher_id:   'T-DEMO',
+      teacher_name: 'Demo Teacher',
+      role:         'Teacher',
+      classes:      'P3,P4',
+      status:       'active',
+    },
+    students: [
+      { student_id: 'STU-DEMO-0001', name_en: 'Alice Chen',   class: 'P3', gender: 'F', status: 'Active', parent_tg_id: '' },
+      { student_id: 'STU-DEMO-0002', name_en: 'Bob Tan',      class: 'P3', gender: 'M', status: 'Active', parent_tg_id: '' },
+      { student_id: 'STU-DEMO-0003', name_en: 'Clara Myint',  class: 'P4', gender: 'F', status: 'Active', parent_tg_id: '' },
+      { student_id: 'STU-DEMO-0004', name_en: 'David Lwin',   class: 'P4', gender: 'M', status: 'Active', parent_tg_id: '' },
+    ],
+    attendance:     [],
+    dailyReports:   [],
+    homework:       [],
+    parentComms:    [],
+    incidents:      [],
+    timetable:      [],
+    subjects:       [],
+    terms:          [],
+    monthlySummary: [],
+  };
+}
+
+// ─── GLOBAL TOAST ────────────────────────────────────────────────────────────
+
+window.showToast = function(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), duration);
+};
+
+// ─── GLOBAL MODAL HELPERS ────────────────────────────────────────────────────
+
+window.openModal = function(html, onClose) {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.innerHTML = html;
+  overlay.classList.add('active');
+  overlay.onclick = function(e) {
+    if (e.target === overlay) closeModal(onClose);
+  };
+};
+
+window.closeModal = function(onClose) {
+  const overlay = document.getElementById('modalOverlay');
+  overlay.classList.remove('active');
+  overlay.innerHTML = '';
+  if (typeof onClose === 'function') onClose();
+};
+
+// ─── SKELETON LOADING HELPER ─────────────────────────────────────────────────
+
+window.skeletonCards = function(count = 3) {
+  return Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton-line w60"></div>
+      <div class="skeleton-line w40"></div>
+      <div class="skeleton-line w80"></div>
+    </div>
+  `).join('');
+};
+
+// ─── EMPTY STATE HELPER ──────────────────────────────────────────────────────
+
+window.emptyState = function(icon, title, subtitle = '') {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon">${icon}</div>
+      <div class="empty-title">${title}</div>
+      ${subtitle ? `<div class="empty-sub">${subtitle}</div>` : ''}
+    </div>
+  `;
+};
