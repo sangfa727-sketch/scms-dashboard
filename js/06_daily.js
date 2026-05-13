@@ -1,232 +1,207 @@
-/* ============================================================
-   SCMS v10 — 06_daily.js
-   Daily reports page:
-     • Filterable list grouped/sorted by date
-     • Entry cards showing mood / meal / nap / teacher note
-     • Form sheet with 8-emoji mood picker, meal dropdown,
-       nap minutes, and free-text note
-   ============================================================ */
-
-/* ============================================================
-   PAGE: DAILY REPORTS
-   ============================================================ */
-
 /**
- * Re-render the daily-reports page from State.
+ * SCMS v10.2 — 06_daily.js
+ * Daily reports: list view + modal form + save via n8n TWA.
  */
+
+'use strict';
+
+let _dailyClass = null;
+
 function renderDaily() {
-  const f       = State.filters.daily;
-  const list    = $('#dailyList');
-  const reports = State.dailyReports;
+  _renderDailyClassChips();
+}
 
-  /* ---------- Class chips ---------- */
-  const classes  = getClasses();
-  const chipsRow = $('#dailyClassChips');
-  chipsRow.innerHTML = '';
+// ─── Class chips ──────────────────────────────────────────────────────────
 
-  chipsRow.appendChild(makeChip(
-    'ALL', 'All', reports.length, f.class === 'ALL',
-    () => { f.class = 'ALL'; renderDaily(); }
-  ));
+function _renderDailyClassChips() {
+  const el = document.getElementById('dailyClassChips');
+  if (!el) return;
 
-  classes.forEach(cls => {
-    const cnt = reports.filter(r => r.class === cls).length;
-    chipsRow.appendChild(makeChip(
-      cls, cls, cnt, f.class === cls,
-      () => { f.class = cls; renderDaily(); }
-    ));
-  });
+  const classes = [...new Set(
+    window.APP.students.filter(s => s.status === 'Active').map(s => s.class).filter(Boolean)
+  )].sort();
 
-  /* ---------- Apply filter ---------- */
-  let filtered = reports;
-  if (f.class !== 'ALL') {
-    filtered = filtered.filter(r => r.class === f.class);
-  }
-
-  /* ---------- Render list ---------- */
-  list.innerHTML = '';
-
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No reports yet',
-      'Tap + to write a daily report.',
-      '📝'
-    ));
+  if (!classes.length) {
+    el.innerHTML = '';
+    document.getElementById('dailyList').innerHTML = emptyState('📋', 'No classes yet', 'Add students first');
     return;
   }
 
-  filtered
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .forEach(r => {
-      list.appendChild(el('div', { class: 'entry-card' },
-        el('div', { class: 'entry-meta' },
-          el('span', { class: 'tag' }, r.class || '—'),
-          el('span', { class: 'entry-date mono' }, formatDate(r.date))
-        ),
-        el('div', { class: 'entry-title' }, r.name_en || r.student_id),
-        r.behaviour_note
-          ? el('div', { class: 'entry-text' }, r.behaviour_note)
-          : null,
-        el('div', { class: 'entry-footer' },
-          r.mood    ? el('span', {}, '😊 ' + r.mood)               : null,
-          r.meal    ? el('span', {}, '🍽 ' + r.meal)                : null,
-          r.nap_min ? el('span', {}, '💤 ' + r.nap_min + ' min')   : null
-        )
-      ));
-    });
+  if (!_dailyClass) _dailyClass = classes[0];
+
+  el.innerHTML = classes.map(c =>
+    `<button class="chip${c === _dailyClass ? ' active' : ''}" onclick="selectDailyClass('${c}')">${c}</button>`
+  ).join('');
+
+  _renderDailyList(_dailyClass);
 }
 
-/* ============================================================
-   DAILY REPORT FORM SHEET
-   ============================================================ */
+window.selectDailyClass = function(cls) {
+  _dailyClass = cls;
+  document.querySelectorAll('#dailyClassChips .chip').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === cls)
+  );
+  _renderDailyList(cls);
+};
 
-/**
- * Open the daily-report form.
- * If `student` is passed, that student is pre-selected.
- *
- * Saves through writeAction('save_daily_report') which routes
- * through n8n where OpenAI polishes the note into a warm parent
- * message and the bot can deliver it.
- */
-function openDailyReportForm(student = null) {
-  const studentList = State.students;
-  let selectedMood  = '';
+// ─── Daily report list ────────────────────────────────────────────────────
 
-  /* ---------- Student dropdown ---------- */
-  const studentSelect = el('select', { class: 'form-select', id: 'drStudent' });
-  studentList.forEach(s => {
-    const opt = el('option', { value: s.student_id },
-      `${s.name_en || s.name_mm} (${s.class})`
+function _renderDailyList(cls) {
+  const el = document.getElementById('dailyList');
+  if (!el) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const students = window.APP.students.filter(s => s.class === cls && s.status === 'Active');
+
+  if (!students.length) {
+    el.innerHTML = emptyState('📋', `No students in ${cls}`);
+    return;
+  }
+
+  el.innerHTML = students.map(s => {
+    const report = window.APP.dailyReports.find(
+      r => r.date === today && (r.student_id === s.student_id || r.name_en === s.name_en)
     );
-    if (student?.student_id === s.student_id) opt.selected = true;
-    studentSelect.appendChild(opt);
-  });
 
-  /* ---------- Mood picker (8 emojis) ---------- */
-  const moodPicker = el('div', { class: 'mood-pick' });
-  const moods = [
-    ['😊', 'Happy'],
-    ['😐', 'OK'],
-    ['😕', 'Quiet'],
-    ['😴', 'Tired'],
-    ['🤩', 'Excited'],
-    ['😢', 'Upset'],
-    ['😤', 'Frustrated'],
-    ['🤒', 'Unwell']
-  ];
+    const done = !!report;
+    const mood = report?.mood || '';
+    const moodMap = { Happy: '😊', OK: '😐', Tired: '😴', Sad: '😢', Energetic: '⚡' };
+    const moodIcon = moodMap[mood] || mood;
 
-  moods.forEach(([emoji, label]) => {
-    const btn = el('button', {
-      class:   'mood-btn',
-      type:    'button',
-      onclick: () => {
-        selectedMood = label;
-        $$('.mood-btn', moodPicker).forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        haptic('selection');
-      }
-    },
-      el('span', { class: 'emoji' }, emoji),
-      el('span', { class: 'label' }, label)
-    );
-    moodPicker.appendChild(btn);
-  });
+    return `
+      <div class="list-card ${done ? 'card-done' : ''}">
+        <div class="card-row">
+          <div class="card-avatar">${(s.name_en || '?')[0]}</div>
+          <div class="card-info">
+            <div class="card-name">${s.name_en || s.name_local}</div>
+            ${done
+              ? `<div class="card-sub">${moodIcon} ${mood} · Meal: ${report.meal || '—'} · Nap: ${report.nap_min ?? '—'}min</div>`
+              : `<div class="card-sub card-sub-pending">Report not yet filled</div>`
+            }
+          </div>
+          <button class="btn-icon-round ${done ? 'btn-edit' : 'btn-add'}"
+            onclick="openDailyModal('${s.student_id}','${s.name_en || s.name_local}')">
+            ${done ? '✎' : '+'}
+          </button>
+        </div>
+        ${done && report.behaviour_note
+          ? `<div class="card-note">${report.behaviour_note}</div>`
+          : ''}
+      </div>`;
+  }).join('');
+}
 
-  /* ---------- Build sheet body ---------- */
-  const mealSelect = el('select', { class: 'form-select', id: 'drMeal' });
-  mealSelect.innerHTML =
-    '<option value="">—</option>' +
-    '<option>Good</option>' +
-    '<option>OK</option>' +
-    '<option>Picky</option>' +
-    '<option>None</option>';
+// ─── Daily report modal ───────────────────────────────────────────────────
 
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Student'),
-      studentSelect
-    ),
-
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Mood'),
-      moodPicker
-    ),
-
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Meal'),
-        mealSelect
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Nap (min)'),
-        el('input', {
-          class:       'form-input',
-          type:        'number',
-          id:          'drNap',
-          placeholder: '0',
-          min:         0
-        })
-      )
-    ),
-
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Note'),
-      el('textarea', {
-        class:       'form-textarea',
-        id:          'drNote',
-        placeholder: 'How did the day go? What did they learn?'
-      })
-    ),
-
-    /* ---------- Save button ---------- */
-    el('button', {
-      class:   'btn-primary',
-      onclick: async () => {
-        const sid = studentSelect.value;
-        const s   = State.students.find(x => x.student_id === sid);
-
-        const data = {
-          date:           todayISO(),
-          student_id:     sid,
-          name_en:        s?.name_en || '',
-          class:          s?.class   || '',
-          meal:           $('#drMeal').value || null,
-          nap_min:        parseInt($('#drNap').value, 10) || 0,
-          mood:           selectedMood,
-          behaviour_note: $('#drNote').value.trim(),
-          teacher_id:     State.user.id || 'T001'
-        };
-
-        /* ---------- Validation ---------- */
-        if (!data.behaviour_note && !data.mood) {
-          showToast('Add at least a note or mood', 'error');
-          haptic('error');
-          return;
-        }
-
-        showToast('Saving…');
-
-        try {
-          const r = await writeAction('save_daily_report', { data });
-          if (r.ok) {
-            showToast('✓ Report saved', 'success');
-            haptic('success');
-
-            /* Optimistic local insert */
-            State.dailyReports.unshift(data);
-            closeSheet();
-            renderDaily();
-          } else {
-            throw new Error(r.error || 'unknown');
-          }
-        } catch (e) {
-          console.error('save daily error:', e);
-          showToast('Save failed', 'error');
-          haptic('error');
-        }
-      }
-    }, 'Save Report')
+window.openDailyModal = function(studentId, studentName) {
+  const existing = window.APP.dailyReports.find(
+    r => r.date === new Date().toISOString().slice(0, 10) &&
+         (r.student_id === studentId || r.name_en === studentName)
   );
 
-  openSheet('Daily Report', body);
-}
+  const meals     = ['Full', 'Half', 'Little', 'None'];
+  const moods     = ['Happy', 'OK', 'Tired', 'Sad', 'Energetic'];
+  const moodEmoji = { Happy:'😊', OK:'😐', Tired:'😴', Sad:'😢', Energetic:'⚡' };
+
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Daily Report — ${studentName}</h3>
+
+      <label class="field-label">Meal today</label>
+      <div class="pill-group" id="mealPills">
+        ${meals.map(m => `
+          <button class="pill ${existing?.meal === m ? 'active' : ''}"
+            onclick="togglePill(this,'mealPills')">${m}</button>`).join('')}
+      </div>
+
+      <label class="field-label">Nap (minutes)</label>
+      <input class="form-input" id="napInput" type="number" min="0" max="180" step="5"
+        value="${existing?.nap_min ?? 45}" placeholder="0–180">
+
+      <label class="field-label">Mood</label>
+      <div class="pill-group" id="moodPills">
+        ${moods.map(m => `
+          <button class="pill ${existing?.mood === m ? 'active' : ''}"
+            onclick="togglePill(this,'moodPills')">${moodEmoji[m]} ${m}</button>`).join('')}
+      </div>
+
+      <label class="field-label">Behaviour note <span class="optional">(optional)</span></label>
+      <textarea class="form-textarea" id="noteInput" rows="3"
+        placeholder="e.g. Very focused today, helped classmates…">${existing?.behaviour_note || ''}</textarea>
+
+      <label class="field-label">Toilet OK? <span class="optional">(optional)</span></label>
+      <div class="pill-group" id="toiletPills">
+        <button class="pill ${existing?.toilet_ok === true ? 'active' : ''}"
+          onclick="togglePill(this,'toiletPills')">✓ Yes</button>
+        <button class="pill ${existing?.toilet_ok === false ? 'active' : ''}"
+          onclick="togglePill(this,'toiletPills')">✗ No</button>
+      </div>
+
+      <button class="btn-primary mt16" id="saveDailyBtn"
+        onclick="saveDailyReport('${studentId}','${studentName}')">
+        Save Report
+      </button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
+
+  openModal(html);
+};
+
+window.togglePill = function(btn, groupId) {
+  document.querySelectorAll(`#${groupId} .pill`).forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+};
+
+window.saveDailyReport = async function(studentId, studentName) {
+  const btn = document.getElementById('saveDailyBtn');
+  const meal   = document.querySelector('#mealPills .pill.active')?.textContent.trim() || '';
+  const napRaw = document.getElementById('napInput')?.value;
+  const mood   = document.querySelector('#moodPills .pill.active')?.textContent.trim().replace(/^\S+\s/, '') || '';
+  const note   = document.getElementById('noteInput')?.value.trim() || '';
+  const toilet = document.querySelector('#toiletPills .pill.active')?.textContent.includes('Yes') ?? null;
+
+  if (!meal) { showToast('Please select a meal option'); return; }
+  if (!mood) { showToast('Please select a mood'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const data = {
+    student_id:     studentId,
+    name_en:        studentName,
+    class:          _dailyClass || '',
+    date:           new Date().toISOString().slice(0, 10),
+    meal,
+    nap_min:        parseInt(napRaw, 10) || 0,
+    mood,
+    behaviour_note: note,
+    toilet_ok:      toilet,
+    teacher_id:     window.APP.teacher_id,
+    school_id:      window.APP.school_id,
+  };
+
+  try {
+    await API.saveDailyReport(data);
+
+    // Update local cache
+    window.APP.dailyReports = window.APP.dailyReports.filter(
+      r => !(r.student_id === studentId && r.date === data.date)
+    );
+    window.APP.dailyReports.push(data);
+
+    closeModal();
+    _renderDailyList(_dailyClass);
+    showToast(`✓ Report saved for ${studentName}`);
+
+    if (window.APP.tg?.HapticFeedback) {
+      window.APP.tg.HapticFeedback.notificationOccurred('success');
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Save Report';
+    showToast('Save failed: ' + (e.message || 'Network error'));
+  }
+};
+
+window.openDailyReportModal = openDailyModal.bind(null, '', '');
