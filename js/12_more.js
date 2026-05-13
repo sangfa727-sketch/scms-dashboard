@@ -1,230 +1,97 @@
-/* ============================================================
-   SCMS v10.1 — 12_more.js
-   More page:
-     • Quick-jump to Summary / Incidents / Parent Messages
-     • Add Student form launcher
-     • School Settings (NEW v10.1 — subjects/houses/grades/etc.)
-     • Connection Settings (Supabase URL, anon key, webhook)
-     • Sync Now (force re-fetch)
-     • About sheet showing version + connection mode + current term
-
-   NEW IN v10.1:
-     • "School Settings" menu item → openSchoolSettings()
-     • "Connection Settings" renamed (was "Settings")
-     • About sheet shows current term + config summary
-   ============================================================ */
-
-/* ============================================================
-   PAGE: MORE
-   ============================================================ */
-
 /**
- * Re-render the more page.
- * Built from a static menu list — no data dependency.
+ * SCMS v10.2 — 12_more.js
+ * More menu: quick actions, admin tools, school info.
  */
+
+'use strict';
+
 function renderMore() {
-  const menu = $('#moreMenu');
+  const el = document.getElementById('moreMenu');
+  if (!el) return;
 
-  /* ---------- Menu items ---------- */
-  const items = [
-    {
-      icon:   '📊',
-      title:  'Monthly Summary',
-      desc:   'Attendance & performance overview',
-      action: () => switchPage('summary')
-    },
-    {
-      icon:   '⚡',
-      title:  'Incidents',
-      desc:   'Behavior & achievement records',
-      action: () => switchPage('incidents')
-    },
-    {
-      icon:   '💬',
-      title:  'Parent Messages',
-      desc:   'Communication log',
-      action: () => switchPage('parents')
-    },
-    {
-      icon:   '➕',
-      title:  'Add Student',
-      desc:   'Register a new student',
-      action: () => openStudentRegistrationForm()
-    },
-    /* NEW v10.1: School Settings (subjects/houses/grades/etc.) */
-    {
-      icon:   '🏫',
-      title:  'School Settings',
-      desc:   'Subjects, houses, grades, schedule…',
-      action: () => openSchoolSettings()
-    },
-    {
-      icon:   '🔄',
-      title:  'Sync Now',
-      desc:   'Refresh data from Supabase',
-      action: () => bootstrap(true)
-    },
-    {
-      icon:   '🔌',
-      title:  'Connection Settings',
-      desc:   'Supabase URL & webhook config',
-      action: () => showSetup()
-    },
-    {
-      icon:   'ℹ️',
-      title:  'About',
-      desc:   `SCMS v${CONFIG.VERSION}`,
-      action: () => showAbout()
-    }
-  ];
+  const isAdmin = window.APP.is_admin;
 
-  /* ---------- Render menu (reuses student-card styling) ---------- */
-  menu.innerHTML = '';
+  el.innerHTML = `
+    <!-- Profile card -->
+    <div class="profile-card">
+      <div class="profile-avatar">${(window.APP.teacher_name || '?')[0]}</div>
+      <div class="profile-info">
+        <div class="profile-name">${window.APP.teacher_name || '—'}</div>
+        <div class="profile-role">${window.APP.teacher_role || '—'} · ${window.APP.school_name || '—'}</div>
+        <div class="profile-id">${window.APP.teacher_id || '—'}</div>
+      </div>
+    </div>
 
-  items.forEach(it => {
-    menu.appendChild(el('div', {
-      class:   'student-card',
-      onclick: () => { haptic('selection'); it.action(); }
-    },
-      el('div', {
-        class: 'avatar',
-        style: 'background:var(--line-2);color:var(--ink-2);font-size:20px'
-      }, it.icon),
+    <!-- Quick actions -->
+    <div class="more-section-title">Quick Actions</div>
+    <div class="more-grid">
+      <button class="more-tile" onclick="openParentCommModal()">
+        <span class="more-icon">💬</span>
+        <span>Message parent</span>
+      </button>
+      <button class="more-tile" onclick="openIncidentModal()">
+        <span class="more-icon">⚡</span>
+        <span>Log incident</span>
+      </button>
+      <button class="more-tile" onclick="openHomeworkModal()">
+        <span class="more-icon">📚</span>
+        <span>Add homework</span>
+      </button>
+      <button class="more-tile" onclick="openAddStudentModal()">
+        <span class="more-icon">➕</span>
+        <span>Add student</span>
+      </button>
+    </div>
 
-      el('div', { class: 'info' },
-        el('div', { class: 'name' },    it.title),
-        el('div', { class: 'name-mm' }, it.desc)
-      )
-    ));
-  });
+    ${isAdmin ? `
+    <!-- Admin tools -->
+    <div class="more-section-title">Admin Tools</div>
+    <div class="more-list">
+      <button class="more-row" onclick="showAdminInfo()">
+        <span class="more-row-icon">🏫</span>
+        <span class="more-row-label">School settings</span>
+        <span class="more-row-chevron">›</span>
+      </button>
+      <button class="more-row" onclick="showToast('Teacher management — coming soon')">
+        <span class="more-row-icon">👥</span>
+        <span class="more-row-label">Manage teachers</span>
+        <span class="more-row-chevron">›</span>
+      </button>
+      <button class="more-row" onclick="showToast('Export to CSV — coming soon')">
+        <span class="more-row-icon">📤</span>
+        <span class="more-row-label">Export data</span>
+        <span class="more-row-chevron">›</span>
+      </button>
+    </div>` : ''}
+
+    <!-- School info -->
+    <div class="more-section-title">School</div>
+    <div class="more-info-card">
+      <div class="info-row"><span>School ID</span><code>${window.APP.school_id || '—'}</code></div>
+      <div class="info-row"><span>Students</span><span>${window.APP.students.filter(s=>s.status==='Active').length}</span></div>
+      <div class="info-row"><span>Term</span><span>${window.APP.currentTerm?.term_name || '—'}</span></div>
+      <div class="info-row"><span>Version</span><span>v${SCMS_CONFIG.VERSION}</span></div>
+    </div>
+
+    <div style="height: 40px;"></div>
+  `;
 }
 
-/* ============================================================
-   ABOUT SHEET
-   ============================================================ */
-
-/**
- * Show the About bottom sheet with app metadata.
- * v10.1: now includes current term, subject count, config summary.
- */
-function showAbout() {
-  /* Compute connection mode label */
-  const mode =
-    CONFIG.DEMO          ? 'Demo'         :
-    CONFIG.SUPABASE_URL  ? 'Live'         :
-                           'Unconfigured';
-
-  const term = State.currentTerm;
-  const termLabel = term
-    ? `${term.term_name} · ${formatDate(term.start_date)} → ${formatDate(term.end_date)}`
-    : null;
-
-  const body = el('div', {},
-
-    /* ---------- Description ---------- */
-    el('p', {
-      style: 'color:var(--ink-2);font-size:14px;line-height:1.6'
-    },
-      'School Class Management System. Telegram Mini App connected to ' +
-      'Supabase (database) and n8n (bot orchestration + AI smart chat). ' +
-      'Built for international school teachers.'
-    ),
-
-    /* ---------- Metadata grid ---------- */
-    el('div', { class: 'detail-grid' },
-
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Version'),
-        el('div', { class: 'value mono' }, CONFIG.VERSION)
-      ),
-
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Mode'),
-        el('div', { class: 'value' }, mode)
-      ),
-
-      el('div', { class: 'detail-item full' },
-        el('div', { class: 'label' }, 'School'),
-        el('div', { class: 'value' }, State.schoolConfig.school_name || '—')
-      ),
-
-      el('div', { class: 'detail-item full' },
-        el('div', { class: 'label' }, 'School ID'),
-        el('div', { class: 'value mono' }, CONFIG.SCHOOL_ID)
-      ),
-
-      State.user.name
-        ? el('div', { class: 'detail-item' },
-            el('div', { class: 'label' }, 'Teacher'),
-            el('div', { class: 'value' }, State.user.name)
-          )
-        : null,
-
-      State.user.id
-        ? el('div', { class: 'detail-item' },
-            el('div', { class: 'label' }, 'Teacher ID'),
-            el('div', { class: 'value mono' }, State.user.id)
-          )
-        : null,
-
-      State.schoolConfig.academic_year
-        ? el('div', { class: 'detail-item full' },
-            el('div', { class: 'label' }, 'Academic Year'),
-            el('div', { class: 'value' }, State.schoolConfig.academic_year)
-          )
-        : null,
-
-      /* NEW v10.1: current term */
-      termLabel
-        ? el('div', { class: 'detail-item full' },
-            el('div', { class: 'label' }, 'Current Term'),
-            el('div', { class: 'value' }, termLabel)
-          )
-        : null
-    ),
-
-    /* ---------- Statistics ---------- */
-    el('div', { class: 'detail-grid', style: 'margin-top:16px' },
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Students'),
-        el('div', { class: 'value mono' }, String(State.students.length))
-      ),
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Classes'),
-        el('div', { class: 'value mono' }, String(getClasses().length))
-      ),
-      /* NEW v10.1 */
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Subjects'),
-        el('div', { class: 'value mono' }, String(getSubjects().length))
-      ),
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Houses'),
-        el('div', { class: 'value mono' }, String(getHouses().length))
-      )
-    ),
-
-    /* NEW v10.1: locale info */
-    el('div', { class: 'detail-grid', style: 'margin-top:8px' },
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Language'),
-        el('div', { class: 'value' }, getConfigValue('local_language', 'English'))
-      ),
-      el('div', { class: 'detail-item' },
-        el('div', { class: 'label' }, 'Week Start'),
-        el('div', { class: 'value' }, getConfigValue('week_start', 'Monday'))
-      )
-    ),
-
-    /* ---------- Tech credits ---------- */
-    el('p', {
-      style:
-        'color:var(--ink-3);font-size:11px;text-align:center;' +
-        'margin-top:24px;line-height:1.6'
-    },
-      'Powered by Telegram WebApp + Supabase + n8n + OpenAI'
-    )
-  );
-
-  openSheet('About SCMS', body);
-}
+window.showAdminInfo = function() {
+  const cfg = window.APP.config || {};
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">School Settings</h3>
+      <div class="info-row"><span>School ID</span><code>${window.APP.school_id}</code></div>
+      <div class="info-row"><span>School Name</span><span>${window.APP.school_name}</span></div>
+      <div class="info-row"><span>Subjects</span><span>${(cfg.subjects || []).length}</span></div>
+      <div class="info-row"><span>Att. codes</span><span>${(cfg.attendance_codes || []).map(c=>c.code).join(', ')}</span></div>
+      <div class="info-row"><span>Currency</span><span>${cfg.currency || 'USD'}</span></div>
+      <p style="font-size:12px;color:var(--muted);margin-top:16px">
+        To update config, use /menu in the Telegram bot.
+      </p>
+      <button class="btn-secondary mt16" onclick="closeModal()">Close</button>
+    </div>`;
+  openModal(html);
+};
