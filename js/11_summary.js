@@ -1,141 +1,62 @@
-/* ============================================================
-   SCMS v10 — 11_summary.js
-   Monthly summary page:
-     • Per-student card with avatar + name + class
-     • Stats: present / absent / reports sent / HW assigned
-     • Attendance percentage bar with smart color thresholds
-         ≥ 90%  →  green   (excellent)
-         75–90% →  amber   (warning)
-         < 75%  →  red     (concerning)
-   ============================================================ */
-
-/* ============================================================
-   PAGE: MONTHLY SUMMARY
-   ============================================================ */
-
 /**
- * Re-render the monthly-summary page from State.
+ * SCMS v10.2 — 11_summary.js
+ * Monthly summary cards.
  */
+
+'use strict';
+
+let _sumClass = 'All';
+
 function renderSummary() {
-  const f     = State.filters.summary;
-  const items = State.monthlySummary;
+  const el = document.getElementById('summaryClassChips');
+  if (!el) return;
 
-  /* ---------- Class chips ---------- */
-  const classes  = [...new Set(items.map(r => r.class).filter(Boolean))].sort();
-  const chipsRow = $('#summaryClassChips');
-  chipsRow.innerHTML = '';
+  const classes = ['All', ...[...new Set(
+    window.APP.monthlySummary.map(s => s.class).filter(Boolean)
+  )].sort()];
 
-  chipsRow.appendChild(makeChip(
-    'ALL', 'All', items.length, f.class === 'ALL',
-    () => { f.class = 'ALL'; renderSummary(); }
-  ));
+  el.innerHTML = classes.map(c =>
+    `<button class="chip${c === _sumClass ? ' active' : ''}"
+      onclick="filterSumClass('${c}')">${c}</button>`
+  ).join('');
 
-  classes.forEach(cls => {
-    const cnt = items.filter(r => r.class === cls).length;
-    chipsRow.appendChild(makeChip(
-      cls, cls, cnt, f.class === cls,
-      () => { f.class = cls; renderSummary(); }
-    ));
-  });
+  _renderSummaryList();
+}
 
-  /* ---------- Apply filter ---------- */
-  let filtered = items;
-  if (f.class !== 'ALL') {
-    filtered = filtered.filter(r => r.class === f.class);
-  }
+window.filterSumClass = function(cls) {
+  _sumClass = cls;
+  document.querySelectorAll('#summaryClassChips .chip').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === cls)
+  );
+  _renderSummaryList();
+};
 
-  /* ---------- Render list ---------- */
-  const list = $('#summaryList');
-  list.innerHTML = '';
+function _renderSummaryList() {
+  const el = document.getElementById('summaryList');
+  if (!el) return;
 
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No summary',
-      'Monthly data will appear here once attendance is recorded.',
-      '📊'
-    ));
+  let list = window.APP.monthlySummary;
+  if (_sumClass !== 'All') list = list.filter(s => s.class === _sumClass);
+
+  if (!list.length) {
+    el.innerHTML = emptyState('📊', 'No summary data yet', 'Generated automatically each month');
     return;
   }
 
-  filtered.forEach(r => {
-    list.appendChild(summaryCard(r));
-  });
-}
+  const gradeColor = { A:'#059669', B:'#0891B2', C:'#D97706', D:'#DC2626', F:'#7C3AED' };
 
-/* ============================================================
-   SUMMARY CARD
-   ============================================================ */
-
-/**
- * Build one summary card for a student.
- */
-function summaryCard(r) {
-  /* ---------- Attendance % + color ---------- */
-  const pct = (r.attendance_pct || 0) * 100;
-  const fillClass =
-    pct >= 90 ? ''     :   // green (default)
-    pct >= 75 ? 'warn' :   // amber
-                'bad';     // red
-
-  /* ---------- Cross-reference with State.students to get house color ---------- */
-  const student = State.students.find(s => s.student_id === r.student_id);
-
-  return el('div', { class: 'summary-card' },
-
-    /* ---------- Header row: avatar + name + grade ---------- */
-    el('div', { class: 'student-row' },
-      el('div', {
-        class: 'avatar ' + houseClass(student?.house_color),
-        style: 'width:36px;height:36px;font-size:14px'
-      }, initials(r.name_en)),
-
-      el('div', { class: 'info', style: 'flex:1' },
-        el('div', { class: 'name' }, r.name_en || r.student_id),
-        el('div', {
-          style: 'font-size:11px;color:var(--ink-3);margin-top:1px'
-        }, r.class || '')
-      ),
-
-      r.overall_grade
-        ? el('span', { class: 'tag' }, r.overall_grade)
-        : null
-    ),
-
-    /* ---------- 4-column stats ---------- */
-    el('div', { class: 'summary-stats' },
-      statItem(r.present_days   || 0, 'Present'),
-      statItem(r.absent_days    || 0, 'Absent'),
-      statItem(r.reports_sent   || 0, 'Reports'),
-      statItem(r.hw_assigned    || 0, 'HW')
-    ),
-
-    /* ---------- Attendance bar ---------- */
-    el('div', { class: 'attendance-bar' },
-      el('div', {
-        class: 'fill ' + fillClass,
-        style: `width:${pct.toFixed(0)}%`
-      })
-    ),
-
-    /* ---------- Bar label ---------- */
-    el('div', {
-      style:
-        'display:flex;justify-content:space-between;' +
-        'font-size:11px;color:var(--ink-3);' +
-        'margin-top:6px;font-weight:500'
-    },
-      el('span', {}, 'Attendance'),
-      el('span', { class: 'mono' }, pct.toFixed(1) + '%')
-    )
-  );
-}
-
-/**
- * Build a single stat item inside the 4-column grid.
- */
-function statItem(num, lbl) {
-  return el('div', { class: 'item' },
-    el('div', { class: 'num' }, String(num)),
-    el('div', { class: 'lbl' }, lbl)
-  );
+  el.innerHTML = list.map(s => {
+    const gColor = gradeColor[s.overall_grade?.toUpperCase()] || '#6B7280';
+    return `
+      <div class="list-card">
+        <div class="card-row">
+          <div class="card-info">
+            <div class="card-name">${s.name_en || s.student_id}</div>
+            <div class="card-sub">${s.class || '—'} · Absent: ${s.absent_days ?? '—'} days · HW: ${s.hw_assigned ?? '—'}</div>
+            ${s.notes ? `<div class="card-note">${s.notes}</div>` : ''}
+          </div>
+          ${s.overall_grade ? `<span class="grade-badge" style="color:${gColor}">${s.overall_grade}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
 }
