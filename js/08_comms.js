@@ -1,197 +1,124 @@
-/* ============================================================
-   SCMS v10 — 08_comms.js
-   Parent communications page:
-     • Filterable log of all parent messages (sent/queued/failed)
-     • Type chips: General / Absent Alert / Daily Report / etc.
-     • Compose form sheet to send a new message
-   ============================================================ */
-
-/* ============================================================
-   PAGE: PARENT COMMUNICATIONS
-   ============================================================ */
-
 /**
- * Re-render the parent-comms page from State.
+ * SCMS v10.2 — 08_comms.js
+ * Parent communications list + broadcast modal.
  */
+
+'use strict';
+
+let _commsType = 'All';
+
 function renderComms() {
-  const f     = State.filters.comms;
-  const list  = $('#commsList');
-  const items = State.parentComms;
+  const el = document.getElementById('commsTypeChips');
+  if (!el) return;
 
-  /* ---------- Type chips ---------- */
-  const types    = [...new Set(items.map(r => r.type).filter(Boolean))];
-  const chipsRow = $('#commsTypeChips');
-  chipsRow.innerHTML = '';
+  const types = ['All','General','Absent Alert','Daily Report','Praise','Incident','Homework','Broadcast'];
+  el.innerHTML = types.map(t =>
+    `<button class="chip${t === _commsType ? ' active' : ''}"
+      onclick="filterCommsType('${t}')">${t}</button>`
+  ).join('');
 
-  chipsRow.appendChild(makeChip(
-    'ALL', 'All', items.length, f.type === 'ALL',
-    () => { f.type = 'ALL'; renderComms(); }
-  ));
+  _renderCommsList();
+}
 
-  types.forEach(t => {
-    const cnt = items.filter(r => r.type === t).length;
-    chipsRow.appendChild(makeChip(
-      t, t, cnt, f.type === t,
-      () => { f.type = t; renderComms(); }
-    ));
-  });
+window.filterCommsType = function(type) {
+  _commsType = type;
+  document.querySelectorAll('#commsTypeChips .chip').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === type)
+  );
+  _renderCommsList();
+};
 
-  /* ---------- Apply filter ---------- */
-  let filtered = items;
-  if (f.type !== 'ALL') {
-    filtered = filtered.filter(r => r.type === f.type);
-  }
+function _renderCommsList() {
+  const el = document.getElementById('commsList');
+  if (!el) return;
 
-  /* ---------- Render list ---------- */
-  list.innerHTML = '';
+  let list = [...window.APP.parentComms].sort((a, b) => b.date?.localeCompare(a.date));
+  if (_commsType !== 'All') list = list.filter(c => c.type === _commsType);
 
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No messages',
-      'Send messages from any student card or tap + here.',
-      '💬'
-    ));
+  if (!list.length) {
+    el.innerHTML = emptyState('💬', 'No messages yet', 'Comms will appear here after you send them');
     return;
   }
 
-  filtered
-    .sort((a, b) =>
-      String(b.timestamp || b.date).localeCompare(String(a.timestamp || a.date))
-    )
-    .forEach(r => {
-      /* Status tag color */
-      const statusColor =
-        r.status === 'Sent'   ? 'green' :
-        r.status === 'Failed' ? 'red'   :
-        'gray';
+  const typeIcon = { 'Daily Report':'📋','Absent Alert':'🚨','Praise':'⭐','Incident':'⚡','Homework':'📚','Broadcast':'📢','General':'💬' };
 
-      /* Type tag color (Absent Alert = red, everything else = blue) */
-      const typeColor = r.type === 'Absent Alert' ? 'red' : 'blue';
+  el.innerHTML = list.map(c => `
+    <div class="list-card">
+      <div class="card-row">
+        <div class="comm-icon">${typeIcon[c.type] || '💬'}</div>
+        <div class="card-info">
+          <div class="card-name">${c.name_en || 'Class broadcast'}</div>
+          <div class="card-sub">${c.type} · ${fmtDate(c.date)}</div>
+          ${c.message_preview ? `<div class="card-note">${c.message_preview.slice(0, 80)}${c.message_preview.length > 80 ? '…' : ''}</div>` : ''}
+        </div>
+        <span class="status-dot ${c.status === 'Sent' ? 'dot-sent' : 'dot-queued'}" title="${c.status}"></span>
+      </div>
+    </div>`
+  ).join('');
+}
 
-      list.appendChild(el('div', { class: 'entry-card' },
-        el('div', { class: 'entry-meta' },
-          el('span', { class: 'tag ' + typeColor },   r.type   || '—'),
-          el('span', { class: 'tag ' + statusColor }, r.status || 'Pending'),
-          el('span', { class: 'entry-date mono' },    formatDate(r.date))
-        ),
-        el('div', { class: 'entry-title' }, r.name_en || r.student_id),
-        el('div', { class: 'entry-text'  }, r.message_preview || ''),
-        r.error
-          ? el('div', { class: 'entry-footer' },
-              el('span', { style: 'color:var(--red)' }, '⚠ ' + r.error)
-            )
-          : null
-      ));
+window.openParentCommModal = function() {
+  const students = window.APP.students.filter(s => s.status === 'Active');
+  const classes  = [...new Set(students.map(s => s.class).filter(Boolean))].sort();
+
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Send Parent Message</h3>
+
+      <label class="field-label">Send to</label>
+      <div class="pill-group" id="commTargetPills">
+        <button class="pill active" onclick="togglePill(this,'commTargetPills');toggleCommTarget('class')">Class</button>
+        <button class="pill" onclick="togglePill(this,'commTargetPills');toggleCommTarget('student')">Individual</button>
+      </div>
+
+      <div id="commClassTarget">
+        <label class="field-label">Class</label>
+        <select class="form-input" id="commClass">
+          ${classes.map(c => `<option>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div id="commStudentTarget" style="display:none">
+        <label class="field-label">Student</label>
+        <input class="form-input" id="commStu" placeholder="Student name" list="commStuList">
+        <datalist id="commStuList">
+          ${students.map(s => `<option value="${s.name_en}">${s.name_en} (${s.class})</option>`).join('')}
+        </datalist>
+      </div>
+
+      <label class="field-label">Message</label>
+      <textarea class="form-textarea" id="commMsg" rows="4" placeholder="Type your message to parents…"></textarea>
+
+      <button class="btn-primary mt16" id="sendCommBtn" onclick="sendParentComm()">Send Message</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
+
+  openModal(html);
+};
+
+window.toggleCommTarget = function(target) {
+  document.getElementById('commClassTarget').style.display   = target === 'class'   ? 'block' : 'none';
+  document.getElementById('commStudentTarget').style.display = target === 'student' ? 'block' : 'none';
+};
+
+window.sendParentComm = async function() {
+  const btn = document.getElementById('sendCommBtn');
+  const msg = document.getElementById('commMsg').value.trim();
+  if (!msg) { showToast('Message is required'); return; }
+
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await API.sendParentComm({
+      message_preview: msg,
+      class:           document.getElementById('commClass')?.value || '',
+      name_en:         document.getElementById('commStu')?.value   || '',
+      type:            'General',
     });
-}
-
-/* ============================================================
-   PARENT MESSAGE FORM SHEET
-   ============================================================ */
-
-/**
- * Open the compose-parent-message form sheet.
- * If `student` is passed, that student is pre-selected.
- *
- * Saves through writeAction('send_parent_comm') which:
- *   - logs the message in parent_comms
- *   - n8n actually delivers the Telegram message to the parent
- */
-function openParentMessageForm(student = null) {
-  const studentList = State.students;
-
-  /* ---------- Student dropdown ---------- */
-  const studentSelect = el('select', { class: 'form-select', id: 'pmStudent' });
-  studentList.forEach(s => {
-    const opt = el('option', { value: s.student_id },
-      `${s.name_en || s.name_mm} (${s.class})`
-    );
-    if (student?.student_id === s.student_id) opt.selected = true;
-    studentSelect.appendChild(opt);
-  });
-
-  /* ---------- Type dropdown ---------- */
-  const typeSelect = el('select', { class: 'form-select', id: 'pmType' });
-  typeSelect.innerHTML =
-    '<option>General</option>' +
-    '<option>Absent Alert</option>' +
-    '<option>Daily Report</option>' +
-    '<option>Reminder</option>' +
-    '<option>Praise</option>' +
-    '<option>Homework</option>';
-
-  /* ---------- Build sheet body ---------- */
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Student'),
-      studentSelect
-    ),
-
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Type'),
-      typeSelect
-    ),
-
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Message ', el('span', { class: 'req' }, '*')),
-      el('textarea', {
-        class:       'form-textarea',
-        id:          'pmMessage',
-        rows:        5,
-        placeholder: 'Type your message to the parent…'
-      })
-    ),
-
-    /* ---------- Send button ---------- */
-    el('button', {
-      class:   'btn-primary',
-      onclick: async () => {
-        const sid = studentSelect.value;
-        const s   = State.students.find(x => x.student_id === sid);
-
-        const data = {
-          timestamp:       new Date().toISOString(),
-          date:            todayISO(),
-          student_id:      sid,
-          name_en:         s?.name_en       || '',
-          parent_tg_id:    s?.parent_tg_id  || '',
-          type:            $('#pmType').value,
-          message_preview: $('#pmMessage').value.trim(),
-          status:          'Queued',
-          teacher_id:      State.user.id || 'T001'
-        };
-
-        /* ---------- Validation ---------- */
-        if (!data.message_preview) {
-          showToast('Empty message', 'error');
-          haptic('error');
-          return;
-        }
-
-        showToast('Sending…');
-
-        try {
-          const r = await writeAction('send_parent_comm', { data });
-          if (r.ok) {
-            data.status = r.status || 'Sent';
-            showToast('✓ Message sent', 'success');
-            haptic('success');
-
-            /* Optimistic local insert */
-            State.parentComms.unshift(data);
-            closeSheet();
-            renderComms();
-          } else {
-            throw new Error(r.error || 'unknown');
-          }
-        } catch (e) {
-          console.error('send comm error:', e);
-          showToast('Send failed', 'error');
-          haptic('error');
-        }
-      }
-    }, 'Send Message')
-  );
-
-  openSheet('Message Parent', body);
-}
+    closeModal();
+    showToast('✓ Message sent');
+    if (window.APP.tg?.HapticFeedback) window.APP.tg.HapticFeedback.notificationOccurred('success');
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Send Message';
+    showToast('Failed: ' + (e.message || 'error'));
+  }
+};
