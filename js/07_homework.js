@@ -1,252 +1,149 @@
-/* ============================================================
-   SCMS v10.1 — 07_homework.js
-   Homework page:
-     • Filterable list of assignments (Homework / Lesson / Project / Quiz / ...)
-     • Entry cards with subject, type, LB / WB page, description, due date
-     • Form sheet to assign new homework
-
-   NEW IN v10.1:
-     • Subjects loaded from State.subjects / State.config.subjects
-       (school-customizable, no longer hardcoded)
-     • Type list loaded from State.config.homework_types
-     • Subject color shown on subject tag (if defined)
-   ============================================================ */
-
-/* ============================================================
-   PAGE: HOMEWORK
-   ============================================================ */
-
 /**
- * Re-render the homework page from State.
+ * SCMS v10.2 — 07_homework.js
+ * Homework log: list by class, add homework modal, save via n8n TWA.
  */
+
+'use strict';
+
+let _hwClass = null;
+
 function renderHomework() {
-  const f     = State.filters.homework;
-  const list  = $('#hwList');
-  const items = State.homework;
+  const el = document.getElementById('hwClassChips');
+  if (!el) return;
 
-  /* ---------- Class chips ---------- */
-  const classes  = getClasses();
-  const chipsRow = $('#hwClassChips');
-  chipsRow.innerHTML = '';
+  const classes = [...new Set(
+    window.APP.students.filter(s => s.status === 'Active').map(s => s.class).filter(Boolean)
+  )].sort();
 
-  chipsRow.appendChild(makeChip(
-    'ALL', 'All', items.length, f.class === 'ALL',
-    () => { f.class = 'ALL'; renderHomework(); }
-  ));
+  if (!_hwClass && classes.length) _hwClass = classes[0];
 
-  classes.forEach(cls => {
-    const cnt = items.filter(r => r.class === cls).length;
-    chipsRow.appendChild(makeChip(
-      cls, cls, cnt, f.class === cls,
-      () => { f.class = cls; renderHomework(); }
-    ));
-  });
+  el.innerHTML = classes.map(c =>
+    `<button class="chip${c === _hwClass ? ' active' : ''}" onclick="selectHwClass('${c}')">${c}</button>`
+  ).join('');
 
-  /* ---------- Apply filter ---------- */
-  let filtered = items;
-  if (f.class !== 'ALL') {
-    filtered = filtered.filter(r => r.class === f.class);
-  }
+  _renderHwList();
+}
 
-  /* ---------- Render list ---------- */
-  list.innerHTML = '';
+window.selectHwClass = function(cls) {
+  _hwClass = cls;
+  document.querySelectorAll('#hwClassChips .chip').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === cls)
+  );
+  _renderHwList();
+};
 
-  if (!filtered.length) {
-    list.appendChild(emptyState(
-      'No homework',
-      'Tap + to assign new homework.',
-      '📚'
-    ));
+function _renderHwList() {
+  const el = document.getElementById('hwList');
+  if (!el) return;
+
+  const list = window.APP.homework
+    .filter(h => !_hwClass || h.class === _hwClass)
+    .sort((a, b) => b.date?.localeCompare(a.date));
+
+  if (!list.length) {
+    el.innerHTML = emptyState('📚', 'No homework recorded', 'Tap + to add');
     return;
   }
 
-  /* ---------- Build subject color lookup ---------- */
-  const subjectColors = {};
-  getSubjects().forEach(s => {
-    if (s.subject_color) {
-      subjectColors[s.subject_name] = s.subject_color;
-      subjectColors[s.subject_code] = s.subject_color;
-    }
-  });
+  const typeColors = { Homework:'#4F46E5', Lesson:'#0891B2', Test:'#DC2626', Quiz:'#D97706', Project:'#059669' };
 
-  filtered
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-    .forEach(r => {
-      /* Apply subject color if known */
-      const color = subjectColors[r.subject];
-      const subjectTag = el('span', { class: 'tag' }, r.subject || '—');
-      if (color) {
-        subjectTag.style.background = color + '22';   // 13% alpha
-        subjectTag.style.color      = color;
-      }
-
-      list.appendChild(el('div', { class: 'entry-card' },
-        el('div', { class: 'entry-meta' },
-          subjectTag,
-          el('span', { class: 'tag gray' }, r.type || 'Homework'),
-          el('span', { class: 'entry-date mono' }, formatDate(r.date))
-        ),
-        el('div', { class: 'entry-title' }, r.class || ''),
-        r.description
-          ? el('div', { class: 'entry-text' }, r.description)
-          : null,
-        el('div', { class: 'entry-footer' },
-          r.lb_page  ? el('span', {}, 'LB p.' + r.lb_page) : null,
-          r.wb_page  ? el('span', {}, 'WB p.' + r.wb_page) : null,
-          r.due_date ? el('span', {}, 'Due: ' + formatDate(r.due_date)) : null
-        )
-      ));
-    });
+  el.innerHTML = list.map(h => {
+    const color = typeColors[h.type] || '#6B7280';
+    return `
+      <div class="list-card">
+        <div class="card-row">
+          <div class="hw-type-dot" style="background:${color}"></div>
+          <div class="card-info">
+            <div class="card-name">${h.subject || '—'} <span class="type-tag" style="color:${color}">${h.type || ''}</span></div>
+            <div class="card-sub">${h.class || '—'} · ${h.date || '—'}${h.due_date ? ' · Due: '+h.due_date : ''}</div>
+            ${h.description ? `<div class="card-note">${h.description}</div>` : ''}
+          </div>
+        </div>
+        ${h.lb_page || h.wb_page ? `
+          <div class="hw-pages">
+            ${h.lb_page ? `📖 LB p.${h.lb_page}` : ''}
+            ${h.wb_page ? `📔 WB p.${h.wb_page}` : ''}
+          </div>` : ''}
+      </div>`;
+  }).join('');
 }
 
-/* ============================================================
-   HOMEWORK FORM SHEET
-   ============================================================ */
+window.openHomeworkModal = function() {
+  const subjects = window.APP.config?.subjects || ['Mathematics','English','Science','Social Studies'];
+  const types    = window.APP.config?.homework_types || ['Homework','Lesson','Test','Quiz','Project','Worksheet'];
+  const classes  = [...new Set(window.APP.students.map(s => s.class).filter(Boolean))].sort();
 
-/**
- * Open the assign-homework form sheet.
- *
- * v10.1: subject list pulled from State.subjects (normalized) or
- * State.config.subjects (fallback). Homework types from
- * State.config.homework_types.
- *
- * Saves through writeAction('save_homework') → n8n → Supabase.
- */
-function openHomeworkForm() {
-  const classes  = getClasses();
-  const subjects = getSubjects();              /* normalized: [{code,name,color}] */
-  const types    = getConfigList('homework_types');
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Add Homework / Lesson</h3>
 
-  /* ---------- Class dropdown ---------- */
-  const classSelect = el('select', { class: 'form-select', id: 'hwClass' });
-  if (classes.length) {
-    classSelect.innerHTML = classes
-      .map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
-      .join('');
-  } else {
-    classSelect.innerHTML = '<option value="">— No classes yet —</option>';
+      <label class="field-label">Subject</label>
+      <select class="form-input" id="hwSubject">
+        ${subjects.map(s => `<option>${s}</option>`).join('')}
+      </select>
+
+      <label class="field-label">Class</label>
+      <select class="form-input" id="hwClass">
+        ${classes.map(c => `<option ${c === _hwClass ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+
+      <label class="field-label">Type</label>
+      <div class="pill-group" id="hwTypePills">
+        ${types.map((t, i) => `<button class="pill ${i===0?'active':''}" onclick="togglePill(this,'hwTypePills')">${t}</button>`).join('')}
+      </div>
+
+      <label class="field-label">Description</label>
+      <textarea class="form-textarea" id="hwDesc" rows="2" placeholder="What was assigned…"></textarea>
+
+      <div class="form-row">
+        <div class="form-col">
+          <label class="field-label">LB page <span class="optional">(opt)</span></label>
+          <input class="form-input" id="hwLb" placeholder="e.g. 42">
+        </div>
+        <div class="form-col">
+          <label class="field-label">WB page <span class="optional">(opt)</span></label>
+          <input class="form-input" id="hwWb" placeholder="e.g. 18">
+        </div>
+      </div>
+
+      <label class="field-label">Due date <span class="optional">(optional)</span></label>
+      <input class="form-input" id="hwDue" type="date">
+
+      <button class="btn-primary mt16" id="saveHwBtn" onclick="saveHomework()">Save</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
+
+  openModal(html);
+};
+
+window.saveHomework = async function() {
+  const btn = document.getElementById('saveHwBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const data = {
+      subject:     document.getElementById('hwSubject').value,
+      class:       document.getElementById('hwClass').value,
+      type:        document.querySelector('#hwTypePills .pill.active')?.textContent.trim() || 'Homework',
+      description: document.getElementById('hwDesc').value.trim(),
+      lb_page:     document.getElementById('hwLb').value.trim(),
+      wb_page:     document.getElementById('hwWb').value.trim(),
+      due_date:    document.getElementById('hwDue').value || null,
+      date:        new Date().toISOString().slice(0, 10),
+      teacher_id:  window.APP.teacher_id,
+      school_id:   window.APP.school_id,
+    };
+
+    await API.saveHomework(data);
+    window.APP.homework.unshift(data);
+
+    closeModal();
+    _renderHwList();
+    showToast('✓ Homework saved');
+    if (window.APP.tg?.HapticFeedback) window.APP.tg.HapticFeedback.notificationOccurred('success');
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Save';
+    showToast('Save failed: ' + (e.message || 'error'));
   }
-
-  /* ---------- Subject dropdown ---------- */
-  const subjectSelect = el('select', { class: 'form-select', id: 'hwSubject' });
-  if (subjects.length) {
-    subjectSelect.innerHTML = subjects
-      .map(s => `<option value="${escapeHTML(s.subject_name)}">${escapeHTML(s.subject_name)}</option>`)
-      .join('');
-  } else {
-    subjectSelect.innerHTML = '<option value="">— No subjects configured —</option>';
-  }
-
-  /* ---------- Type dropdown ---------- */
-  const typeSelect = el('select', { class: 'form-select', id: 'hwType' });
-  typeSelect.innerHTML = types
-    .map(t => `<option>${escapeHTML(t)}</option>`)
-    .join('');
-
-  /* ---------- Build sheet body ---------- */
-  const body = el('div', {},
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Class'),
-      classSelect
-    ),
-
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Subject'),
-        subjectSelect
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'Type'),
-        typeSelect
-      )
-    ),
-
-    el('div', { class: 'form-row' },
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'LB Page'),
-        el('input', {
-          class: 'form-input', type: 'text', id: 'hwLB', placeholder: 'e.g. 12'
-        })
-      ),
-      el('div', { class: 'form-group' },
-        el('label', { class: 'form-label' }, 'WB Page'),
-        el('input', {
-          class: 'form-input', type: 'text', id: 'hwWB', placeholder: 'e.g. 8'
-        })
-      )
-    ),
-
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' },
-        'Description ', el('span', { class: 'req' }, '*')
-      ),
-      el('textarea', {
-        class: 'form-textarea', id: 'hwDesc',
-        placeholder: 'What should students do?'
-      })
-    ),
-
-    el('div', { class: 'form-group' },
-      el('label', { class: 'form-label' }, 'Due Date'),
-      el('input', { class: 'form-input', type: 'date', id: 'hwDue' })
-    ),
-
-    /* ---------- Save button ---------- */
-    el('button', {
-      class:   'btn-primary',
-      onclick: async () => {
-        const data = {
-          date:        todayISO(),
-          class:       $('#hwClass').value,
-          subject:     $('#hwSubject').value,
-          type:        $('#hwType').value,
-          lb_page:     $('#hwLB').value.trim(),
-          wb_page:     $('#hwWB').value.trim(),
-          description: $('#hwDesc').value.trim(),
-          due_date:    $('#hwDue').value || null,
-          teacher_id:  State.user.id || 'T001'
-        };
-
-        /* ---------- Validation ---------- */
-        if (!data.class) {
-          showToast('Please pick a class', 'error');
-          haptic('error');
-          return;
-        }
-        if (!data.subject) {
-          showToast('Please pick a subject', 'error');
-          haptic('error');
-          return;
-        }
-        if (!data.description) {
-          showToast('Add description', 'error');
-          haptic('error');
-          return;
-        }
-
-        showToast('Saving…');
-
-        try {
-          const r = await writeAction('save_homework', { data });
-          if (r.ok) {
-            showToast('✓ Homework assigned', 'success');
-            haptic('success');
-
-            /* Optimistic local insert */
-            State.homework.unshift(data);
-            closeSheet();
-            renderHomework();
-          } else {
-            throw new Error(r.error || 'unknown');
-          }
-        } catch (e) {
-          console.error('save homework error:', e);
-          showToast('Save failed', 'error');
-          haptic('error');
-        }
-      }
-    }, 'Assign Homework')
-  );
-
-  openSheet('New Homework', body);
-}
+};
