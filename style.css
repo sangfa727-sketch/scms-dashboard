@@ -162,19 +162,34 @@ a { color: inherit; }
 }
 .header-row {
   height: 100%;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 16px;
+  display: flex; align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+}
+.school-info {
+  flex: 1;
+  min-width: 0;          /* allow flex children to shrink below content size */
+  overflow: hidden;
 }
 .school-name {
   font-family: 'Fraunces', serif;
-  font-size: 18px; font-weight: 700;
-  letter-spacing: -0.4px;
+  font-size: 17px; font-weight: 700;
+  letter-spacing: -0.3px;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .school-meta {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--muted);
+  font-size: 11.5px; color: var(--muted);
   margin-top: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.header-actions {
+  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
 }
 .role-badge {
   background: var(--bg2);
@@ -2315,4 +2330,392 @@ html[data-platform="web"] .tab-btn-chat {
 [data-platform="web"] .boot-screen {
   background: var(--bg);
 }
+
+
+/* ============================================================================
+   SCMS v11 — POLISH PASS (May 2026)
+   Clean attendance, form pickers, FAB visibility, jitter prevention,
+   class/grade management UI
+   ============================================================================ */
+
+/* ── Attendance: clean horizontal row ────────────────────────────────── */
+.attend-row-clean {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.attend-row-clean[data-marked="1"] {
+  border-color: rgba(8, 145, 178, 0.4);
+  background: linear-gradient(to right, rgba(8, 145, 178, 0.04), transparent 30%);
+}
+[data-theme="dark"] .attend-row-clean[data-marked="1"] {
+  border-color: rgba(34, 211, 238, 0.35);
+  background: linear-gradient(to right, rgba(34, 211, 238, 0.08), transparent 30%);
+}
+
+.att-row-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.att-avatar-sm {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.att-row-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.att-note-dot {
+  font-size: 12px;
+  margin-right: 2px;
+}
+.att-note-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: var(--bg2);
+  color: var(--text2);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.att-note-btn:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.att-codes-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.att-code-pill {
+  height: 38px;
+  border-radius: 10px;
+  background: var(--bg2);
+  color: var(--text2);
+  font-weight: 700;
+  font-size: 14px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.12s;
+  display: inline-flex; align-items: center; justify-content: center;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.att-code-pill:hover { background: var(--bg3); }
+.att-code-pill.sel {
+  color: #fff;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+/* Selected colors per code */
+.att-code-pill.sel[data-code="P"] { background: #10B981; }
+.att-code-pill.sel[data-code="A"] { background: #DC2626; }
+.att-code-pill.sel[data-code="L"] { background: #F59E0B; }
+.att-code-pill.sel[data-code="T"] { background: #F59E0B; }
+.att-code-pill.sel[data-code="S"] { background: #6366F1; }
+.att-code-pill.sel[data-code="E"] { background: #8B5CF6; }
+.att-code-pill.sel[data-code="H"] { background: #06B6D4; }
+
+/* ── Attendance: compact single-row stat bar ─────────────────────────── */
+#attendStats { display: block; margin-bottom: 14px; }
+.att-statbar {
+  position: relative;
+  display: flex; align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  overflow: hidden;
+}
+.att-statbar-item {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center;
+}
+.att-statbar-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.att-statbar-of {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.att-statbar-lbl {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.att-statbar-sep {
+  width: 1px;
+  height: 32px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.att-statbar-green .att-statbar-num { color: #10B981; }
+.att-statbar-red .att-statbar-num { color: #DC2626; }
+
+.att-statbar-progress {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: var(--bg2);
+}
+.att-statbar-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #10B981);
+  transition: width 0.3s ease;
+}
+
+/* Hide the old v2 grid (replaced) */
+.attend-row-v2, .att-codes-v2, .att-code-v2 { display: none !important; }
+
+/* ── Form picker trigger (replaces native <select> dropdowns) ────────── */
+.form-picker-trigger {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.form-picker-trigger:hover { background: var(--bg3); border-color: var(--border2); }
+.form-picker-trigger:focus { outline: none; border-color: var(--accent); }
+.form-picker-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.form-picker-caret {
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+/* ── Value picker bottom sheet (vp = value picker) ───────────────────── */
+.vp-sheet { max-height: 80vh; display: flex; flex-direction: column; }
+.vp-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 8px -4px 12px;
+  padding: 0 4px;
+}
+.vp-row {
+  width: 100%;
+  display: flex; align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.vp-row:hover { background: var(--bg2); }
+.vp-row.sel { background: var(--bg2); }
+.vp-row.sel .vp-label { color: var(--accent); font-weight: 600; }
+.vp-label { flex: 1; font-size: 15px; color: var(--text); }
+.vp-check { color: var(--accent); font-weight: 700; }
+.vp-delete {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--bg2);
+  color: var(--muted);
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.vp-row:hover .vp-delete { opacity: 1; }
+.vp-delete:hover { background: rgba(220, 38, 38, 0.15); color: var(--red); }
+.vp-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.vp-add-row {
+  display: flex; gap: 8px;
+  margin-top: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.vp-add-row .form-input { flex: 1; height: 40px; }
+.vp-add-row .btn-primary {
+  height: 40px; padding: 0 16px;
+  width: auto; flex-shrink: 0;
+  font-size: 13px;
+}
+
+/* ── Classes & grades manager ────────────────────────────────────────── */
+.cg-section { margin-bottom: 20px; }
+.cg-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cg-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text2);
+}
+.cg-section-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg2);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.cg-list {
+  display: flex; flex-wrap: wrap;
+  gap: 6px;
+  min-height: 32px;
+  margin-bottom: 8px;
+}
+.cg-row {
+  display: inline-flex; align-items: center;
+  gap: 4px;
+  padding: 6px 4px 6px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text);
+}
+.cg-name { font-weight: 500; }
+.cg-remove {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cg-remove:hover { background: rgba(220, 38, 38, 0.15); color: var(--red); }
+.cg-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 4px;
+}
+.cg-add-row {
+  display: flex; gap: 8px;
+}
+.cg-add-row .form-input { flex: 1; }
+.cg-add-row .btn-primary {
+  width: auto; flex-shrink: 0;
+  padding: 0 16px;
+}
+
+/* ── FAB: tighten and prevent jitter ─────────────────────────────────── */
+.fab {
+  /* default visible state; updated by JS per page */
+  transition: opacity 0.2s, transform 0.2s;
+}
+.fab:active { transform: scale(0.92); }
+
+/* ── Form layout fixes ───────────────────────────────────────────────── */
+.form-row {
+  display: flex; gap: 10px;
+  margin-bottom: 4px;
+}
+.form-col { flex: 1; min-width: 0; }
+.form-help {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── Modal: prevent jitter, keep above keyboard ──────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  /* Use both vh and dvh — dvh handles keyboard opening on iOS/Android */
+  height: 100vh;
+  height: 100dvh;
+  overscroll-behavior: contain;
+}
+.modal-sheet {
+  /* Keep sheet anchored, don't bounce */
+  overscroll-behavior-y: contain;
+  /* On mobile Webkit, prevent the scroll-into-view jump when an input focuses */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Don't let focused inputs scroll the page underneath */
+input:focus, textarea:focus, select:focus {
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 80px;
+}
+
+/* ── Page transition stability ───────────────────────────────────────── */
+.page {
+  /* Stop iOS bounce that causes page to "shake" */
+  overscroll-behavior-y: contain;
+  /* Prevent layout shift between pages */
+  contain: layout;
+}
+#pages {
+  /* Keep #pages from bouncing on overscroll */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Disable double-tap-zoom on iOS (causes shake on rapid taps) */
+button, .tab-btn, .att-code-pill, .pill, .chip {
+  touch-action: manipulation;
+}
+
+/* ── New form-input label class consistency ──────────────────────────── */
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+
+/* ── Modal actions row ───────────────────────────────────────────────── */
+.modal-actions {
+  display: flex; gap: 8px;
+}
+.modal-actions .btn-primary,
+.modal-actions .btn-secondary { flex: 1; }
 
