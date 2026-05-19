@@ -1,20 +1,11 @@
 /**
- * SCMS v10.2 — 13_register.js
+ * SCMS v11 — 13_register.js
  * Registration flows handled via Telegram bot — no frontend registration UI needed.
- * This file is kept for compatibility with existing module loading order.
- *
- * Registration is done through:
- *   /register_school  → n8n school registration wizard
- *   /register_teacher → n8n teacher registration wizard
- *
- * The TWA (this dashboard) auto-detects the teacher's school and role
- * from initData without any manual registration UI.
+ * Kept for compatibility with existing module loading order.
  */
 
 'use strict';
 
-// No-op: registration handled by Telegram bot
-// Expose stub so other modules can call without errors
 window.openRegisterModal = function() {
   openModal(`
     <div class="modal-sheet" onclick="event.stopPropagation()">
