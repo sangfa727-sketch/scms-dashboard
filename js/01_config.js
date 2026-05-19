@@ -33,7 +33,7 @@ const SCMS_CONFIG = {
   // Telegram bot username — used to build deep-links for parent TG ID capture
   // e.g. https://t.me/<BOT_USERNAME>?start=parent_STU-XXXXXX
   // Backend (n8n Merge Pre-State) parses regex: /^\/start\s+parent_(STU-[A-Z0-9]+)/i
-  BOT_USERNAME:    'VavidaISBbot',
+  BOT_USERNAME:    '@VavidaISBbot',
 
   // App version
   VERSION: '11.0.0',
