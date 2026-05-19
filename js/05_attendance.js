@@ -1,6 +1,13 @@
 /**
- * SCMS v10.2 — 05_attendance.js
+ * SCMS v11 — 05_attendance.js
  * Attendance marking: class picker → student grid → save via n8n RPC.
+ *
+ * NEW in v11:
+ *   • Full code set P/A/L/T/S/E/H exposed (was only 5)
+ *   • Each code button shows a friendly mini-label underneath (Pres / Abs / Lv / Late / Sick / Exc / ½ day)
+ *   • Long-press / "?" header button opens a Legend sheet explaining what each code means
+ *   • Bulk-mark toolbar: "All Present" / "Clear marks" — saves clicks for large classes
+ *   • Avatars use the student's home colour (matches the Students page)
  */
 
 'use strict';
@@ -29,7 +36,8 @@ function _renderDateStrip() {
     const day = d.toLocaleDateString('en-US', { weekday: 'short' });
     const num = d.getDate();
     const active = iso === _attendDate ? ' active' : '';
-    html += `<button class="date-chip${active}" onclick="selectAttendDate('${iso}')">${day}<span>${num}</span></button>`;
+    const isToday = iso === today.toISOString().slice(0, 10) ? ' today' : '';
+    html += `<button class="date-chip${active}${isToday}" onclick="selectAttendDate('${iso}')">${day}<span>${num}</span></button>`;
   }
   strip.innerHTML = html;
 }
@@ -58,11 +66,11 @@ function _renderAttendClassChips() {
     return;
   }
 
-  if (!_attendClass) _attendClass = classes[0];
+  if (!_attendClass || !classes.includes(_attendClass)) _attendClass = classes[0];
 
   el.innerHTML = classes.map(c => `
-    <button class="chip${c === _attendClass ? ' active' : ''}" onclick="selectAttendClass('${c}')">
-      ${c}
+    <button class="chip${c === _attendClass ? ' active' : ''}" data-class="${esc(c)}" onclick="selectAttendClass('${esc(c)}')">
+      ${esc(c)}
     </button>
   `).join('');
 
@@ -73,10 +81,31 @@ window.selectAttendClass = function(cls) {
   _attendClass = cls;
   _attendMarks = {};
   document.querySelectorAll('#attendClassChips .chip').forEach(b => {
-    b.classList.toggle('active', b.textContent.trim() === cls);
+    b.classList.toggle('active', b.dataset.class === cls);
   });
   _renderAttendGrid(cls);
 };
+
+// ─── Attendance code list (the 7 codes) ───────────────────────────────────
+
+function _getAttendanceCodes() {
+  // Server config wins if it defines codes; otherwise fall back to the full set
+  const configCodes = window.APP.config?.attendance_codes;
+  const fallback = ['P', 'A', 'L', 'T', 'S', 'E', 'H'].map(code => ({
+    code,
+    label: window.ATTENDANCE_CODE_LABELS[code].label,
+    color: window.ATTENDANCE_CODE_LABELS[code].color,
+  }));
+
+  if (!Array.isArray(configCodes) || !configCodes.length) return fallback;
+
+  // Ensure every server code has a label/color (server may only send `code`)
+  return configCodes.map(c => ({
+    code:  c.code,
+    label: c.label || window.ATTENDANCE_CODE_LABELS[c.code]?.label || c.code,
+    color: c.color || window.ATTENDANCE_CODE_LABELS[c.code]?.color || '#8A8A82',
+  }));
+}
 
 // ─── Attendance grid ──────────────────────────────────────────────────────
 
@@ -96,47 +125,120 @@ function _renderAttendGrid(cls) {
   );
   existing.forEach(a => { _attendMarks[a.student_id] = a.status; });
 
-  const codes = window.APP.config?.attendance_codes || [
-    { code: 'P', label: 'Present', color: '#10B981' },
-    { code: 'A', label: 'Absent',  color: '#EF4444' },
-    { code: 'L', label: 'Leave',   color: '#3B82F6' },
-    { code: 'T', label: 'Tardy',   color: '#F59E0B' },
-    { code: 'S', label: 'Sick',    color: '#EF4444' },
-  ];
+  const codes = _getAttendanceCodes();
 
-  el.innerHTML = students.map(s => {
+  // Bulk-action toolbar above the grid
+  const toolbar = `
+    <div class="attend-toolbar">
+      <button class="btn-pill-action" onclick="markAllAttend('P')">
+        <span class="dot-mini" style="background:#10B981"></span> All Present
+      </button>
+      <button class="btn-pill-action" onclick="clearAllAttend()">
+        <span class="dot-mini" style="background:#8A8A82"></span> Clear marks
+      </button>
+      <button class="btn-pill-action ghost" onclick="showAttendLegend()" title="Code legend">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 17v.01"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        </svg>
+        Codes
+      </button>
+    </div>`;
+
+  const rows = students.map(s => {
     const current = _attendMarks[s.student_id] || 'P';
+    const homeHex = s.home_color ? homeColorHex(s.home_color) : _classColor(s.class);
     const btns = codes.map(c => {
       const sel = c.code === current ? ' sel' : '';
-      return `<button class="att-code${sel}" style="--att-color:${c.color}"
-        onclick="markAttend('${s.student_id}','${c.code}')" title="${c.label}">${c.code}</button>`;
+      const desc = window.ATTENDANCE_CODE_LABELS[c.code]?.label || c.label;
+      return `
+        <button class="att-code-v2${sel}" style="--att-color:${c.color}"
+          onclick="markAttend('${esc(s.student_id)}','${esc(c.code)}')"
+          title="${esc(desc)}">
+          <span class="att-code-letter">${esc(c.code)}</span>
+          <span class="att-code-mini">${esc(c.label)}</span>
+        </button>`;
     }).join('');
 
     return `
-      <div class="attend-row" id="arow-${s.student_id}">
+      <div class="attend-row-v2" id="arow-${esc(s.student_id)}">
         <div class="attend-name">
-          <span class="att-avatar">${(s.name_en||'?')[0]}</span>
-          <span>${s.name_en || s.name_local || s.student_id}</span>
+          <span class="att-avatar" style="background:${homeHex}; color:#fff;">${esc((s.name_en||'?')[0])}</span>
+          <span class="attend-name-text">${esc(s.name_en || s.name_local || s.student_id)}</span>
         </div>
-        <div class="att-codes">${btns}</div>
+        <div class="att-codes-v2">${btns}</div>
       </div>`;
   }).join('');
+
+  el.innerHTML = toolbar + `<div class="attend-list-wrap">${rows}</div>`;
 
   _renderAttendStats();
 }
 
 window.markAttend = function(studentId, code) {
   _attendMarks[studentId] = code;
-
-  // Update button visuals
   const row = document.getElementById(`arow-${studentId}`);
   if (row) {
-    row.querySelectorAll('.att-code').forEach(b => {
-      b.classList.toggle('sel', b.textContent === code);
+    row.querySelectorAll('.att-code-v2').forEach(b => {
+      const isThis = b.querySelector('.att-code-letter')?.textContent === code;
+      b.classList.toggle('sel', isThis);
     });
   }
   _renderAttendStats();
+
+  if (window.APP.tg?.HapticFeedback) {
+    window.APP.tg.HapticFeedback.selectionChanged();
+  }
 };
+
+window.markAllAttend = function(code) {
+  if (!_attendClass) return;
+  const students = window.APP.students.filter(s => s.class === _attendClass && s.status === 'Active');
+  students.forEach(s => { _attendMarks[s.student_id] = code; });
+  _renderAttendGrid(_attendClass);
+  showToast(`Marked all as ${attendCodeLabel(code)}`);
+  if (window.APP.tg?.HapticFeedback) window.APP.tg.HapticFeedback.impactOccurred('medium');
+};
+
+window.clearAllAttend = function() {
+  _attendMarks = {};
+  if (_attendClass) _renderAttendGrid(_attendClass);
+  showToast('Marks cleared');
+};
+
+window.showAttendLegend = function() {
+  const codes = _getAttendanceCodes();
+  const rows = codes.map(c => {
+    const desc = window.ATTENDANCE_CODE_LABELS[c.code]?.desc || '';
+    return `
+      <div class="legend-row">
+        <span class="legend-code" style="--att-color:${c.color}">${esc(c.code)}</span>
+        <div class="legend-text">
+          <div class="legend-label">${esc(c.label)}</div>
+          ${desc ? `<div class="legend-desc">${esc(desc)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Attendance Codes</h3>
+      <p style="color:var(--muted); font-size:13px; line-height:1.6; margin-bottom:16px;">
+        Tap any code below a student's name to mark their attendance.
+      </p>
+      <div class="legend-grid">${rows}</div>
+      <button class="btn-secondary mt16" onclick="closeModal()">Got it</button>
+    </div>`;
+  openModal(html);
+};
+
+// ─── Helper: class colour fallback ────────────────────────────────────────
+
+function _classColor(cls) {
+  const colors = ['#4F46E5','#0891B2','#059669','#D97706','#DC2626','#7C3AED','#DB2777'];
+  if (!cls) return colors[0];
+  return colors[cls.charCodeAt(0) % colors.length];
+}
 
 // ─── Stats bar ─────────────────────────────────────────────────────────────
 
@@ -182,7 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const students = window.APP.students.filter(s => s.class === _attendClass && s.status === 'Active');
     if (!students.length) { showToast('No students in this class'); return; }
 
-    // Build records — default unmarked to 'P'
     const records = students.map(s => ({
       student_id: s.student_id,
       status:     _attendMarks[s.student_id] || 'P',
@@ -194,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await API.saveAttendance(_attendClass, _attendDate, records);
 
-      // Update local cache
       const existing = window.APP.attendance.filter(
         a => !(a.class === _attendClass && a.date === _attendDate)
       );
