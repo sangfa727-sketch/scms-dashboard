@@ -1,68 +1,62 @@
 /**
- * SCMS v11 — 10_timetable.js
- * Weekly timetable view with day tabs.
+ * SCMS v11 — 11_summary.js
+ * Monthly summary cards.
  */
 
 'use strict';
 
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
-let _ttDay = DAYS[Math.min(Math.max(new Date().getDay() - 1, 0), 4)];
+let _sumClass = 'All';
 
-function renderTimetable() {
-  _renderDayTabs();
-  _renderTtClassChips();
-}
-
-function _renderDayTabs() {
-  const el = document.getElementById('dayTabs');
+function renderSummary() {
+  const el = document.getElementById('summaryClassChips');
   if (!el) return;
 
-  const today = DAYS[Math.min(Math.max(new Date().getDay() - 1, 0), 4)];
+  const classes = ['All', ...[...new Set(
+    window.APP.monthlySummary.map(s => s.class).filter(Boolean)
+  )].sort()];
 
-  el.innerHTML = DAYS.map(d => `
-    <button class="day-tab ${d === _ttDay ? 'active' : ''} ${d === today ? 'today' : ''}"
-      data-day="${d}" onclick="selectTtDay('${d}')">${d.slice(0,3)}</button>
-  `).join('');
+  el.innerHTML = classes.map(c =>
+    `<button class="chip${c === _sumClass ? ' active' : ''}" data-class="${esc(c)}"
+      onclick="filterSumClass('${esc(c)}')">${esc(c)}</button>`
+  ).join('');
+
+  _renderSummaryList();
 }
 
-window.selectTtDay = function(day) {
-  _ttDay = day;
-  document.querySelectorAll('.day-tab').forEach(b =>
-    b.classList.toggle('active', b.dataset.day === day)
+window.filterSumClass = function(cls) {
+  _sumClass = cls;
+  document.querySelectorAll('#summaryClassChips .chip').forEach(b =>
+    b.classList.toggle('active', b.dataset.class === cls)
   );
-  _renderTtList();
+  _renderSummaryList();
 };
 
-function _renderTtClassChips() {
-  const el = document.getElementById('ttClassChips');
-  if (!el) return;
-  el.innerHTML = '';
-  _renderTtList();
-}
-
-function _renderTtList() {
-  const el = document.getElementById('timetableList');
+function _renderSummaryList() {
+  const el = document.getElementById('summaryList');
   if (!el) return;
 
-  const entries = window.APP.timetable.filter(t => t.day === _ttDay)
-    .sort((a, b) => (a.period || 0) - (b.period || 0));
+  let list = window.APP.monthlySummary;
+  if (_sumClass !== 'All') list = list.filter(s => s.class === _sumClass);
 
-  if (!entries.length) {
-    el.innerHTML = emptyState('📅', `No classes on ${_ttDay}`, 'Admin manages the timetable');
+  if (!list.length) {
+    el.innerHTML = emptyState('📊', 'No summary data yet', 'Generated automatically each month');
     return;
   }
 
-  el.innerHTML = entries.map(t => `
-    <div class="tt-row">
-      <div class="tt-period">${esc(String(t.period || '?'))}</div>
-      <div class="tt-info">
-        <div class="tt-subject">${esc(t.subject || '—')}</div>
-        <div class="tt-meta">${esc(t.class || '—')} ${t.room ? '· Room ' + esc(t.room) : ''}</div>
-      </div>
-      <div class="tt-time">${esc(t.start_time || '')}</div>
-    </div>`
-  ).join('');
+  const gradeColor = { A:'#059669', B:'#0891B2', C:'#D97706', D:'#DC2626', F:'#7C3AED' };
 
-  const sub = document.getElementById('timetableSubtitle');
-  if (sub) sub.textContent = `${entries.length} period${entries.length !== 1 ? 's' : ''} on ${_ttDay}`;
+  el.innerHTML = list.map(s => {
+    const gColor = gradeColor[s.overall_grade?.toUpperCase()] || '#6B7280';
+    return `
+      <div class="list-card">
+        <div class="card-row">
+          <div class="card-info">
+            <div class="card-name">${esc(s.name_en || s.student_id)}</div>
+            <div class="card-sub">${esc(s.class || '—')} · Absent: ${s.absent_days ?? '—'} days · HW: ${s.hw_assigned ?? '—'}</div>
+            ${s.notes ? `<div class="card-note">${esc(s.notes)}</div>` : ''}
+          </div>
+          ${s.overall_grade ? `<span class="grade-badge" style="color:${gColor}">${esc(s.overall_grade)}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
 }
