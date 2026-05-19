@@ -1,13 +1,9 @@
 /**
- * SCMS v10.2 — 15_settings.js
- * Settings panel: no URL/key setup needed (multi-tenant auto-detect).
- * Only developer-level overrides available here for testing.
+ * SCMS v11 — 15_settings.js
+ * Settings panel — multi-tenant, no URL/key setup needed.
  */
 
 'use strict';
-
-// Settings panel — opened from header settings icon (removed in v10.2)
-// Kept as no-op for compatibility
 
 window.openSettings = function() {
   const html = `
@@ -15,10 +11,11 @@ window.openSettings = function() {
       <div class="modal-handle"></div>
       <h3 class="modal-title">About SCMS</h3>
 
-      <div class="info-row"><span>Version</span><span>v${SCMS_CONFIG.VERSION}</span></div>
-      <div class="info-row"><span>School</span><span>${window.APP.school_name}</span></div>
-      <div class="info-row"><span>Teacher</span><span>${window.APP.teacher_name}</span></div>
-      <div class="info-row"><span>Role</span><span>${window.APP.teacher_role}</span></div>
+      <div class="info-row"><span>Version</span><span>v${esc(SCMS_CONFIG.VERSION)}</span></div>
+      <div class="info-row"><span>Platform</span><span>${esc(window.APP.platform)}</span></div>
+      <div class="info-row"><span>School</span><span>${esc(window.APP.school_name)}</span></div>
+      <div class="info-row"><span>Teacher</span><span>${esc(window.APP.teacher_name)}</span></div>
+      <div class="info-row"><span>Role</span><span>${esc(window.APP.teacher_role)}</span></div>
       <div class="info-row"><span>Mode</span><span>${window.APP.demo ? 'Demo (preview)' : 'Live'}</span></div>
 
       <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.6">
