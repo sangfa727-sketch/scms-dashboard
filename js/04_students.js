@@ -1,12 +1,20 @@
 /**
- * SCMS v10.2 — 04_students.js
- * Student roster: list, search, filter by class, add new student modal.
+ * SCMS v11 — 04_students.js
+ * Student roster: list, search, filter by class, add/edit/view, parent deep-link.
+ *
+ * NEW in v11:
+ *   • Tap card → opens RICH detail view with EDIT button (was read-only)
+ *   • Add-student form gains: birthday, parent email, home colour
+ *   • Parent TG ID is captured AUTOMATICALLY via a deep-link the teacher shares
+ *     with the parent — no more manual ID entry
+ *   • All previous logic preserved (search, class chip filter, etc.)
  */
 
 'use strict';
 
 let _stuClass  = 'All';
 let _stuSearch = '';
+let _parentLinkPollTimer = null;   // polls server after registering a student
 
 function renderStudents() {
   _renderStudentStats();
@@ -41,7 +49,8 @@ function _renderStudentStats() {
   `;
 
   const subtitle = document.getElementById('studentsSubtitle');
-  if (subtitle) subtitle.textContent = `${active} active students across ${classes} class${classes !== 1 ? 'es' : ''}`;
+  if (subtitle) subtitle.textContent =
+    `${active} active student${active !== 1 ? 's' : ''} across ${classes} class${classes !== 1 ? 'es' : ''}`;
 }
 
 // ─── Class filter chips ────────────────────────────────────────────────────
@@ -55,14 +64,14 @@ function _renderClassChips() {
   )].sort()];
 
   el.innerHTML = classes.map(c =>
-    `<button class="chip${c === _stuClass ? ' active' : ''}" onclick="filterStuClass('${c}')">${c}</button>`
+    `<button class="chip${c === _stuClass ? ' active' : ''}" data-class="${esc(c)}" onclick="filterStuClass('${esc(c)}')">${esc(c)}</button>`
   ).join('');
 }
 
 window.filterStuClass = function(cls) {
   _stuClass = cls;
   document.querySelectorAll('#classChips .chip').forEach(b =>
-    b.classList.toggle('active', b.textContent.trim() === cls)
+    b.classList.toggle('active', b.dataset.class === cls)
   );
   _renderStudentList();
 };
@@ -121,26 +130,31 @@ function _renderStudentList() {
       a => a.date === today && a.student_id === s.student_id
     );
     const attCode  = att?.status || '—';
-    const codes    = window.APP.config?.attendance_codes || [];
-    const codeInfo = codes.find(c => c.code === attCode);
-    const attColor = codeInfo?.color || '#999';
-    const attLabel = codeInfo?.label || 'Not marked';
+    const attColor = attCode === '—' ? '#999' : attendCodeColor(attCode);
+    const attLabel = attCode === '—' ? 'Not marked' : attendCodeLabel(attCode);
+    const homeHex  = s.home_color ? homeColorHex(s.home_color) : _classColor(s.class);
+    const bdayDays = daysUntilBirthday(s.date_of_birth);
+    const bdaySoon = bdayDays !== null && bdayDays <= 7;
 
     return `
-      <div class="list-card" onclick="openStudentDetail('${s.student_id}')">
+      <div class="list-card stu-card" onclick="openStudentDetail('${esc(s.student_id)}')">
         <div class="card-row">
-          <div class="card-avatar" style="background:${_classColor(s.class)}">${(s.name_en||'?')[0]}</div>
+          <div class="card-avatar" style="background:${homeHex}">${esc((s.name_en||'?')[0])}</div>
           <div class="card-info">
-            <div class="card-name">${s.name_en || s.name_local || s.student_id}</div>
+            <div class="card-name">
+              ${esc(s.name_en || s.name_local || s.student_id)}
+              ${bdaySoon ? `<span class="bday-pill" title="Birthday in ${bdayDays} day${bdayDays!==1?'s':''}">🎂 ${bdayDays === 0 ? 'Today!' : bdayDays + 'd'}</span>` : ''}
+            </div>
             <div class="card-sub">
-              <span class="class-tag">${s.class || '—'}</span>
+              <span class="class-tag">${esc(s.class || '—')}</span>
               ${s.name_local && s.name_local !== s.name_en
-                ? `<span class="name-local">${s.name_local}</span>` : ''}
+                ? `<span class="name-local">${esc(s.name_local)}</span>` : ''}
+              ${s.home_color ? `<span class="home-dot" style="background:${homeHex}" title="Home: ${esc(homeColorName(s.home_color))}"></span>` : ''}
             </div>
           </div>
-          <span class="att-pill" style="--pill-color:${attColor}" title="${attLabel}">${attCode}</span>
+          <span class="att-pill" style="--pill-color:${attColor}" title="${esc(attLabel)}">${esc(attCode)}</span>
         </div>
-        ${s.parent_name ? `<div class="card-parent">👤 ${s.parent_name}${s.parent_phone ? ' · ' + s.parent_phone : ''}</div>` : ''}
+        ${s.parent_name ? `<div class="card-parent">👤 ${esc(s.parent_name)}${s.parent_phone ? ' · ' + esc(s.parent_phone) : ''}${s.parent_tg_id ? ' · <span class="tg-linked">✓ TG linked</span>' : ''}</div>` : ''}
       </div>`;
   }).join('');
 }
@@ -151,166 +165,397 @@ function _classColor(cls) {
   return colors[cls.charCodeAt(0) % colors.length];
 }
 
-// ─── Student detail ────────────────────────────────────────────────────────
+// ─── Student detail (rich view with Edit button) ──────────────────────────
 
 window.openStudentDetail = function(studentId) {
   const s = window.APP.students.find(x => x.student_id === studentId);
   if (!s) return;
 
-  const reports  = window.APP.dailyReports.filter(r => r.student_id === studentId).slice(0, 5);
+  const reports   = window.APP.dailyReports.filter(r => r.student_id === studentId).slice(0, 5);
   const incidents = window.APP.incidents.filter(i => i.student_id === studentId).slice(0, 3);
+  const homeHex   = s.home_color ? homeColorHex(s.home_color) : _classColor(s.class);
+  const age       = computeAge(s.date_of_birth);
 
   const html = `
     <div class="modal-sheet" onclick="event.stopPropagation()">
       <div class="modal-handle"></div>
       <div class="detail-header">
-        <div class="detail-avatar" style="background:${_classColor(s.class)}">${(s.name_en||'?')[0]}</div>
-        <div>
-          <h3 class="modal-title mb0">${s.name_en || s.name_local}</h3>
-          ${s.name_local && s.name_local !== s.name_en ? `<div class="detail-local">${s.name_local}</div>` : ''}
+        <div class="detail-avatar" style="background:${homeHex}">${esc((s.name_en||'?')[0])}</div>
+        <div style="flex:1; min-width:0;">
+          <h3 class="modal-title mb0">${esc(s.name_en || s.name_local || '—')}</h3>
+          ${s.name_local && s.name_local !== s.name_en ? `<div class="detail-local">${esc(s.name_local)}</div>` : ''}
           <div class="detail-meta">
-            <span class="class-tag">${s.class}</span>
-            <span class="id-tag">${s.student_id}</span>
+            <span class="class-tag">${esc(s.class || '—')}</span>
+            <span class="id-tag">${esc(s.student_id)}</span>
+            ${s.home_color ? `<span class="home-tag" style="background:${homeHex}20;color:${homeHex}">● ${esc(homeColorName(s.home_color))}</span>` : ''}
           </div>
         </div>
+        <button class="icon-btn-edit" onclick="openEditStudentModal('${esc(s.student_id)}')" title="Edit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+        </button>
       </div>
 
       <div class="detail-grid">
-        ${_detailRow('Gender', s.gender || '—')}
-        ${_detailRow('Grade',  s.grade  || '—')}
-        ${_detailRow('Parent', s.parent_name  || '—')}
-        ${_detailRow('Phone',  s.parent_phone || '—')}
-        ${_detailRow('Telegram', s.parent_tg_id || '—')}
+        ${_detailRow('Gender',   s.gender || '—')}
+        ${_detailRow('Grade',    s.grade  || '—')}
+        ${_detailRow('Birthday', s.date_of_birth ? `${fmtDateLong(s.date_of_birth)}${age != null ? ' · ' + age + ' yrs' : ''}` : '—')}
+        ${_detailRow('Home',     s.home_color ? homeColorName(s.home_color) : '—')}
+        ${_detailRow('Parent',        s.parent_name  || '—')}
+        ${_detailRow('Parent phone',  s.parent_phone || '—')}
+        ${_detailRow('Parent email',  s.parent_email || '—')}
+        ${_detailRow('Parent Telegram', s.parent_tg_id
+          ? `<span class="tg-linked">✓ Linked</span>`
+          : `<button class="link-btn-inline" onclick="showParentLinkQR('${esc(s.student_id)}')">Get link →</button>`)}
       </div>
 
       ${reports.length ? `
         <div class="detail-section">Recent reports</div>
         ${reports.map(r => `
-          <div class="mini-card">${r.date} · ${r.mood || '—'} · Meal: ${r.meal || '—'}</div>`).join('')}
+          <div class="mini-card">${esc(r.date)} · ${esc(r.mood || '—')} · Meal: ${esc(r.meal || '—')}</div>`).join('')}
       ` : ''}
 
       ${incidents.length ? `
         <div class="detail-section">Recent incidents</div>
         ${incidents.map(i => `
-          <div class="mini-card incident-card">${i.date} · ${i.type} · ${i.severity}</div>`).join('')}
+          <div class="mini-card incident-card">${esc(i.date)} · ${esc(i.type)} · ${esc(i.severity)}</div>`).join('')}
       ` : ''}
 
-      <button class="btn-secondary mt16" onclick="closeModal()">Close</button>
+      <button class="btn-primary mt16" onclick="openEditStudentModal('${esc(s.student_id)}')">
+        Edit student info
+      </button>
+      <button class="btn-secondary" onclick="closeModal()">Close</button>
     </div>`;
 
   openModal(html);
 };
 
 function _detailRow(label, value) {
-  return `<div class="detail-row"><span class="detail-lbl">${label}</span><span class="detail-val">${value}</span></div>`;
+  return `<div class="detail-row"><span class="detail-lbl">${esc(label)}</span><span class="detail-val">${value}</span></div>`;
 }
 
-// ─── Add student modal ────────────────────────────────────────────────────
+// ─── Add student modal (with new fields) ──────────────────────────────────
 
 window.openAddStudentModal = function() {
+  _openStudentForm({ mode: 'add' });
+};
+
+window.openEditStudentModal = function(studentId) {
+  const s = window.APP.students.find(x => x.student_id === studentId);
+  if (!s) { showToast('Student not found'); return; }
+  _openStudentForm({ mode: 'edit', student: s });
+};
+
+function _openStudentForm({ mode, student }) {
+  const isEdit  = mode === 'edit';
+  const s       = student || {};
   const grades  = window.APP.config?.grades  || ['KG','P1','P2','P3','P4','P5','P6'];
-  const classes = [...new Set(window.APP.students.map(s => s.class).filter(Boolean))].sort();
+  const classes = [...new Set(window.APP.students.map(x => x.class).filter(Boolean))].sort();
+  const colors  = window.HOME_COLORS;
 
   const html = `
     <div class="modal-sheet" onclick="event.stopPropagation()">
       <div class="modal-handle"></div>
-      <h3 class="modal-title">Add New Student</h3>
+      <h3 class="modal-title">${isEdit ? 'Edit Student' : 'Add New Student'}</h3>
 
       <label class="field-label">Local name (Myanmar / native)</label>
-      <input class="form-input" id="newStuLocal" placeholder="ကျောင်းသားနာမည်…">
+      <input class="form-input" id="newStuLocal" placeholder="ကျောင်းသားနာမည်…" value="${esc(s.name_local || '')}">
 
-      <label class="field-label">English name</label>
-      <input class="form-input" id="newStuEn" placeholder="Full English name">
+      <label class="field-label">English name *</label>
+      <input class="form-input" id="newStuEn" placeholder="Full English name" value="${esc(s.name_en || '')}">
 
-      <label class="field-label">Class</label>
-      <input class="form-input" id="newStuClass" placeholder="e.g. P3, KG-A" list="classList">
-      <datalist id="classList">
-        ${classes.map(c => `<option value="${c}">`).join('')}
-      </datalist>
-
-      <label class="field-label">Grade</label>
-      <select class="form-input" id="newStuGrade">
-        ${grades.map(g => `<option>${g}</option>`).join('')}
-      </select>
+      <div class="form-row">
+        <div class="form-col">
+          <label class="field-label">Class *</label>
+          <input class="form-input" id="newStuClass" placeholder="e.g. P3" list="classList" value="${esc(s.class || '')}">
+          <datalist id="classList">
+            ${classes.map(c => `<option value="${esc(c)}">`).join('')}
+          </datalist>
+        </div>
+        <div class="form-col">
+          <label class="field-label">Grade</label>
+          <select class="form-input" id="newStuGrade">
+            ${grades.map(g => `<option ${s.grade === g ? 'selected' : ''}>${esc(g)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
 
       <label class="field-label">Gender</label>
       <div class="pill-group" id="genderPills">
-        <button class="pill" onclick="togglePill(this,'genderPills')">M</button>
-        <button class="pill" onclick="togglePill(this,'genderPills')">F</button>
-        <button class="pill" onclick="togglePill(this,'genderPills')">Other</button>
+        <button class="pill ${s.gender === 'M' ? 'active' : ''}" type="button" onclick="togglePill(this,'genderPills')">M</button>
+        <button class="pill ${s.gender === 'F' ? 'active' : ''}" type="button" onclick="togglePill(this,'genderPills')">F</button>
+        <button class="pill ${s.gender === 'Other' ? 'active' : ''}" type="button" onclick="togglePill(this,'genderPills')">Other</button>
       </div>
 
+      <label class="field-label">Birthday <span class="optional">(used for 🎂 reminders)</span></label>
+      <input class="form-input" id="newStuDob" type="date" value="${esc(s.date_of_birth || '')}" max="${new Date().toISOString().slice(0,10)}">
+
+      <label class="field-label">Home colour <span class="optional">(team / house)</span></label>
+      <div class="color-grid" id="colorGrid">
+        ${colors.map(c => `
+          <button type="button" class="color-swatch ${s.home_color === c.id ? 'active' : ''}"
+            data-color="${esc(c.id)}"
+            style="--swatch:${c.hex}"
+            title="${esc(c.name)}"
+            onclick="selectHomeColor('${esc(c.id)}')">
+            <span class="swatch-dot"></span>
+            <span class="swatch-name">${esc(c.name)}</span>
+          </button>`).join('')}
+      </div>
+      <input type="hidden" id="newStuColor" value="${esc(s.home_color || '')}">
+
+      <div class="form-divider"><span>Parent / Guardian</span></div>
+
       <label class="field-label">Parent name</label>
-      <input class="form-input" id="newStuParent" placeholder="Parent / guardian name">
+      <input class="form-input" id="newStuParent" placeholder="Parent / guardian name" value="${esc(s.parent_name || '')}">
 
       <label class="field-label">Parent phone</label>
-      <input class="form-input" id="newStuPhone" type="tel" placeholder="+95 9 xxx xxx xxx">
+      <input class="form-input" id="newStuPhone" type="tel" placeholder="+95 9 xxx xxx xxx" value="${esc(s.parent_phone || '')}">
 
-      <label class="field-label">Parent Telegram ID <span class="optional">(optional)</span></label>
-      <input class="form-input" id="newStuTg" placeholder="Telegram user ID number">
+      <label class="field-label">Parent email <span class="optional">(optional)</span></label>
+      <input class="form-input" id="newStuEmail" type="email" placeholder="parent@example.com" value="${esc(s.parent_email || '')}">
 
-      <button class="btn-primary mt16" id="saveStudentBtn" onclick="saveNewStudent()">
-        Register Student
+      ${isEdit
+        ? `<label class="field-label">Parent Telegram</label>
+           <div class="parent-tg-row">
+             ${s.parent_tg_id
+                ? `<div class="tg-linked-box">✓ Linked &nbsp;<code>${esc(s.parent_tg_id)}</code></div>`
+                : `<button type="button" class="link-btn" onclick="showParentLinkQR('${esc(s.student_id)}')">📤 Send link to parent</button>`}
+           </div>`
+        : `<div class="info-tip">
+             <span class="info-tip-icon">ℹ️</span>
+             <span>Parent Telegram ID is filled <b>automatically</b> after you register the student. We'll show you a link to share with the parent — once they tap it in Telegram, their ID will be captured.</span>
+           </div>`
+      }
+
+      <button class="btn-primary mt16" id="saveStudentBtn" onclick="saveStudentForm('${isEdit ? 'edit' : 'add'}','${isEdit ? esc(s.student_id) : ''}')">
+        ${isEdit ? 'Save changes' : 'Register Student'}
       </button>
+      ${isEdit ? `
+        <button class="btn-danger" onclick="confirmDeleteStudent('${esc(s.student_id)}')">
+          Remove student
+        </button>` : ''}
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
     </div>`;
 
   openModal(html);
+}
+
+window.selectHomeColor = function(colorId) {
+  document.querySelectorAll('#colorGrid .color-swatch').forEach(b => {
+    b.classList.toggle('active', b.dataset.color === colorId);
+  });
+  const hidden = document.getElementById('newStuColor');
+  if (hidden) hidden.value = colorId;
 };
 
-window.saveNewStudent = async function() {
+window.saveStudentForm = async function(mode, studentId) {
   const btn = document.getElementById('saveStudentBtn');
 
-  const name_local = document.getElementById('newStuLocal').value.trim();
-  const name_en    = document.getElementById('newStuEn').value.trim();
-  const cls        = document.getElementById('newStuClass').value.trim();
-  const grade      = document.getElementById('newStuGrade').value;
-  const gender     = document.querySelector('#genderPills .pill.active')?.textContent.trim() || '';
-  const parent_name  = document.getElementById('newStuParent').value.trim();
-  const parent_phone = document.getElementById('newStuPhone').value.trim();
-  const parent_tg_id = document.getElementById('newStuTg').value.trim();
+  const data = {
+    name_local:   document.getElementById('newStuLocal').value.trim(),
+    name_en:      document.getElementById('newStuEn').value.trim(),
+    class:        document.getElementById('newStuClass').value.trim(),
+    grade:        document.getElementById('newStuGrade').value,
+    gender:       document.querySelector('#genderPills .pill.active')?.textContent.trim() || '',
+    date_of_birth: document.getElementById('newStuDob').value || null,
+    home_color:   document.getElementById('newStuColor').value || null,
+    parent_name:  document.getElementById('newStuParent').value.trim(),
+    parent_phone: document.getElementById('newStuPhone').value.trim(),
+    parent_email: document.getElementById('newStuEmail').value.trim(),
+  };
+  // name_mm kept as a copy of name_local for backward compatibility with the original schema
+  data.name_mm = data.name_local || data.name_en;
 
-  if (!name_en)  { showToast('English name is required'); return; }
-  if (!cls)      { showToast('Class is required'); return; }
+  // Validation
+  if (!data.name_en)  { showToast('English name is required'); return; }
+  if (!data.class)    { showToast('Class is required'); return; }
+  if (data.parent_email && !isValidEmail(data.parent_email)) {
+    showToast('Parent email looks invalid'); return;
+  }
+  if (data.parent_phone && !isValidPhone(data.parent_phone)) {
+    showToast('Parent phone looks invalid'); return;
+  }
 
   btn.disabled = true;
-  btn.textContent = 'Registering…';
+  btn.textContent = mode === 'edit' ? 'Saving…' : 'Registering…';
 
   try {
-    const result = await API.registerStudent({
-      name_local:   name_local || name_en,
-      name_mm:      name_local || name_en,
-      name_en,
-      class: cls,
-      grade,
-      gender,
-      parent_name,
-      parent_phone,
-      parent_tg_id,
-      school_id:    window.APP.school_id,
-      teacher_id:   window.APP.teacher_id,
-    });
+    if (mode === 'edit') {
+      await API.updateStudent(studentId, data);
+      // Update local cache
+      const idx = window.APP.students.findIndex(x => x.student_id === studentId);
+      if (idx >= 0) {
+        window.APP.students[idx] = { ...window.APP.students[idx], ...data };
+      }
+      closeModal();
+      renderStudents();
+      showToast(`✓ ${data.name_en} updated`);
+      if (window.APP.tg?.HapticFeedback) window.APP.tg.HapticFeedback.notificationOccurred('success');
+    } else {
+      const result = await API.registerStudent({
+        ...data,
+        school_id:    window.APP.school_id,
+        teacher_id:   window.APP.teacher_id,
+      });
 
-    // The result from TWA should include the new student row
-    const newStudent = result?.student || result?.data || {
-      student_id: result?.student_id || 'STU-???',
-      name_en, name_local, class: cls, grade, gender,
-      parent_name, parent_phone, parent_tg_id,
-      status: 'Active', school_id: window.APP.school_id,
-    };
+      const newStudent = result?.student || result?.data || {
+        student_id: result?.student_id || `STU-${Date.now()}`,
+        ...data,
+        status: 'Active',
+        school_id: window.APP.school_id,
+      };
 
-    window.APP.students.push(newStudent);
+      window.APP.students.push(newStudent);
 
-    closeModal();
-    renderStudents();
-    showToast(`✓ ${name_en} registered successfully`);
+      // After registering, immediately show the parent-link QR / share screen
+      _showParentLinkAfterRegister(newStudent);
 
-    if (window.APP.tg?.HapticFeedback) {
-      window.APP.tg.HapticFeedback.notificationOccurred('success');
+      renderStudents();
+      showToast(`✓ ${data.name_en} registered`);
+      if (window.APP.tg?.HapticFeedback) window.APP.tg.HapticFeedback.notificationOccurred('success');
     }
   } catch (e) {
     btn.disabled = false;
-    btn.textContent = 'Register Student';
-    showToast('Registration failed: ' + (e.message || 'Network error'));
+    btn.textContent = mode === 'edit' ? 'Save changes' : 'Register Student';
+    showToast((mode === 'edit' ? 'Save' : 'Registration') + ' failed: ' + (e.message || 'Network error'));
   }
+};
+
+window.confirmDeleteStudent = function(studentId) {
+  const s = window.APP.students.find(x => x.student_id === studentId);
+  if (!s) return;
+
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Remove ${esc(s.name_en)}?</h3>
+      <p style="color:var(--muted); font-size:14px; line-height:1.6">
+        This will mark the student as <b>Inactive</b>. Their records (attendance, reports) are kept, but they won't appear in daily lists. You can ask an admin to restore them later.
+      </p>
+      <button class="btn-danger mt16" onclick="doDeleteStudent('${esc(studentId)}')">Yes, remove</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`;
+  openModal(html);
+};
+
+window.doDeleteStudent = async function(studentId) {
+  try {
+    await API.deleteStudent(studentId);
+    const idx = window.APP.students.findIndex(x => x.student_id === studentId);
+    if (idx >= 0) window.APP.students[idx].status = 'Inactive';
+    closeModal();
+    renderStudents();
+    showToast('✓ Student removed');
+  } catch (e) {
+    showToast('Failed: ' + (e.message || 'Network error'));
+  }
+};
+
+// ─── Parent linking via deep-link ─────────────────────────────────────────
+
+/** After registering, show the share-link screen so the teacher can forward
+ *  the deep-link to the parent (via Telegram, SMS, WhatsApp, etc.). */
+function _showParentLinkAfterRegister(student) {
+  const url = buildParentLinkURL(student.student_id);
+  const html = `
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-handle"></div>
+      <h3 class="modal-title">Link parent's Telegram</h3>
+      <p style="color:var(--muted); font-size:14px; line-height:1.6; margin-bottom:16px;">
+        Share this link with <b>${esc(student.name_en)}</b>'s parent. When the parent taps it in Telegram, our bot will capture their ID and link it to this student — automatically.
+      </p>
+
+      <div class="link-box">
+        <code id="parentLinkUrl">${esc(url)}</code>
+      </div>
+
+      <div class="link-actions">
+        <button class="btn-primary" onclick="copyParentLink('${esc(url)}')">📋 Copy link</button>
+        ${isTWA() ? `<button class="btn-secondary" onclick="shareParentLinkInTelegram('${esc(url)}','${esc(student.name_en)}')">📤 Share via Telegram</button>` : ''}
+      </div>
+
+      <div class="link-status" id="linkStatus">
+        <div class="link-status-dot"></div>
+        <span id="linkStatusText">Waiting for parent to tap the link…</span>
+      </div>
+
+      <button class="btn-secondary mt16" onclick="dismissParentLink()">Done — I'll share later</button>
+    </div>`;
+
+  openModal(html, () => {
+    if (_parentLinkPollTimer) { clearInterval(_parentLinkPollTimer); _parentLinkPollTimer = null; }
+  });
+
+  // Poll the server every 5s to see if the parent has linked
+  _parentLinkPollTimer = setInterval(async () => {
+    try {
+      const result = await API.checkParentLink(student.student_id);
+      if (result?.parent_tg_id) {
+        // Linked! Update student in cache
+        const idx = window.APP.students.findIndex(x => x.student_id === student.student_id);
+        if (idx >= 0) {
+          window.APP.students[idx].parent_tg_id = result.parent_tg_id;
+          if (result.parent_name && !window.APP.students[idx].parent_name) {
+            window.APP.students[idx].parent_name = result.parent_name;
+          }
+        }
+        const statusEl = document.getElementById('linkStatusText');
+        if (statusEl) {
+          statusEl.innerHTML = `✓ <b>Linked!</b> Parent ID: <code>${esc(result.parent_tg_id)}</code>`;
+          document.getElementById('linkStatus').classList.add('linked');
+        }
+        clearInterval(_parentLinkPollTimer);
+        _parentLinkPollTimer = null;
+        renderStudents();
+      }
+    } catch (_e) { /* keep polling silently */ }
+  }, 5000);
+}
+
+window.dismissParentLink = function() {
+  if (_parentLinkPollTimer) { clearInterval(_parentLinkPollTimer); _parentLinkPollTimer = null; }
+  closeModal();
+};
+
+window.copyParentLink = function(url) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(
+      () => showToast('✓ Link copied'),
+      () => _fallbackCopy(url)
+    );
+  } else {
+    _fallbackCopy(url);
+  }
+};
+
+function _fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('✓ Link copied'); }
+  catch { showToast('Copy failed — long-press to copy manually'); }
+  document.body.removeChild(ta);
+}
+
+window.shareParentLinkInTelegram = function(url, studentName) {
+  const text = `Hi! Please tap this link in Telegram to receive updates about ${studentName} from school:`;
+  if (window.APP.tg?.openTelegramLink) {
+    // Use TG's native share — opens forward dialog
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+    window.APP.tg.openTelegramLink(shareUrl);
+  } else {
+    copyParentLink(url);
+  }
+};
+
+/** Show the parent-link sheet on demand (from detail view's "Get link" button) */
+window.showParentLinkQR = function(studentId) {
+  const s = window.APP.students.find(x => x.student_id === studentId);
+  if (!s) return;
+  closeModal();
+  setTimeout(() => _showParentLinkAfterRegister(s), 250);
 };
