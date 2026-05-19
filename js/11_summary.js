@@ -1,5 +1,5 @@
 /**
- * SCMS v10.2 — 11_summary.js
+ * SCMS v11 — 11_summary.js
  * Monthly summary cards.
  */
 
@@ -16,8 +16,8 @@ function renderSummary() {
   )].sort()];
 
   el.innerHTML = classes.map(c =>
-    `<button class="chip${c === _sumClass ? ' active' : ''}"
-      onclick="filterSumClass('${c}')">${c}</button>`
+    `<button class="chip${c === _sumClass ? ' active' : ''}" data-class="${esc(c)}"
+      onclick="filterSumClass('${esc(c)}')">${esc(c)}</button>`
   ).join('');
 
   _renderSummaryList();
@@ -26,7 +26,7 @@ function renderSummary() {
 window.filterSumClass = function(cls) {
   _sumClass = cls;
   document.querySelectorAll('#summaryClassChips .chip').forEach(b =>
-    b.classList.toggle('active', b.textContent.trim() === cls)
+    b.classList.toggle('active', b.dataset.class === cls)
   );
   _renderSummaryList();
 };
@@ -51,11 +51,11 @@ function _renderSummaryList() {
       <div class="list-card">
         <div class="card-row">
           <div class="card-info">
-            <div class="card-name">${s.name_en || s.student_id}</div>
-            <div class="card-sub">${s.class || '—'} · Absent: ${s.absent_days ?? '—'} days · HW: ${s.hw_assigned ?? '—'}</div>
-            ${s.notes ? `<div class="card-note">${s.notes}</div>` : ''}
+            <div class="card-name">${esc(s.name_en || s.student_id)}</div>
+            <div class="card-sub">${esc(s.class || '—')} · Absent: ${s.absent_days ?? '—'} days · HW: ${s.hw_assigned ?? '—'}</div>
+            ${s.notes ? `<div class="card-note">${esc(s.notes)}</div>` : ''}
           </div>
-          ${s.overall_grade ? `<span class="grade-badge" style="color:${gColor}">${s.overall_grade}</span>` : ''}
+          ${s.overall_grade ? `<span class="grade-badge" style="color:${gColor}">${esc(s.overall_grade)}</span>` : ''}
         </div>
       </div>`;
   }).join('');
