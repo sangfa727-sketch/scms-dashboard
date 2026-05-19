@@ -1,5 +1,5 @@
 /**
- * SCMS v10.2 — 07_homework.js
+ * SCMS v11 — 07_homework.js
  * Homework log: list by class, add homework modal, save via n8n TWA.
  */
 
@@ -15,10 +15,10 @@ function renderHomework() {
     window.APP.students.filter(s => s.status === 'Active').map(s => s.class).filter(Boolean)
   )].sort();
 
-  if (!_hwClass && classes.length) _hwClass = classes[0];
+  if ((!_hwClass || !classes.includes(_hwClass)) && classes.length) _hwClass = classes[0];
 
   el.innerHTML = classes.map(c =>
-    `<button class="chip${c === _hwClass ? ' active' : ''}" onclick="selectHwClass('${c}')">${c}</button>`
+    `<button class="chip${c === _hwClass ? ' active' : ''}" data-class="${esc(c)}" onclick="selectHwClass('${esc(c)}')">${esc(c)}</button>`
   ).join('');
 
   _renderHwList();
@@ -27,7 +27,7 @@ function renderHomework() {
 window.selectHwClass = function(cls) {
   _hwClass = cls;
   document.querySelectorAll('#hwClassChips .chip').forEach(b =>
-    b.classList.toggle('active', b.textContent.trim() === cls)
+    b.classList.toggle('active', b.dataset.class === cls)
   );
   _renderHwList();
 };
@@ -38,7 +38,7 @@ function _renderHwList() {
 
   const list = window.APP.homework
     .filter(h => !_hwClass || h.class === _hwClass)
-    .sort((a, b) => b.date?.localeCompare(a.date));
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   if (!list.length) {
     el.innerHTML = emptyState('📚', 'No homework recorded', 'Tap + to add');
@@ -54,15 +54,15 @@ function _renderHwList() {
         <div class="card-row">
           <div class="hw-type-dot" style="background:${color}"></div>
           <div class="card-info">
-            <div class="card-name">${h.subject || '—'} <span class="type-tag" style="color:${color}">${h.type || ''}</span></div>
-            <div class="card-sub">${h.class || '—'} · ${h.date || '—'}${h.due_date ? ' · Due: '+h.due_date : ''}</div>
-            ${h.description ? `<div class="card-note">${h.description}</div>` : ''}
+            <div class="card-name">${esc(h.subject || '—')} <span class="type-tag" style="color:${color}">${esc(h.type || '')}</span></div>
+            <div class="card-sub">${esc(h.class || '—')} · ${esc(h.date || '—')}${h.due_date ? ' · Due: '+esc(h.due_date) : ''}</div>
+            ${h.description ? `<div class="card-note">${esc(h.description)}</div>` : ''}
           </div>
         </div>
         ${h.lb_page || h.wb_page ? `
           <div class="hw-pages">
-            ${h.lb_page ? `📖 LB p.${h.lb_page}` : ''}
-            ${h.wb_page ? `📔 WB p.${h.wb_page}` : ''}
+            ${h.lb_page ? `📖 LB p.${esc(h.lb_page)}` : ''}
+            ${h.wb_page ? `📔 WB p.${esc(h.wb_page)}` : ''}
           </div>` : ''}
       </div>`;
   }).join('');
@@ -80,17 +80,17 @@ window.openHomeworkModal = function() {
 
       <label class="field-label">Subject</label>
       <select class="form-input" id="hwSubject">
-        ${subjects.map(s => `<option>${s}</option>`).join('')}
+        ${subjects.map(s => `<option>${esc(s)}</option>`).join('')}
       </select>
 
       <label class="field-label">Class</label>
       <select class="form-input" id="hwClass">
-        ${classes.map(c => `<option ${c === _hwClass ? 'selected' : ''}>${c}</option>`).join('')}
+        ${classes.map(c => `<option ${c === _hwClass ? 'selected' : ''}>${esc(c)}</option>`).join('')}
       </select>
 
       <label class="field-label">Type</label>
       <div class="pill-group" id="hwTypePills">
-        ${types.map((t, i) => `<button class="pill ${i===0?'active':''}" onclick="togglePill(this,'hwTypePills')">${t}</button>`).join('')}
+        ${types.map((t, i) => `<button type="button" class="pill ${i===0?'active':''}" onclick="togglePill(this,'hwTypePills')">${esc(t)}</button>`).join('')}
       </div>
 
       <label class="field-label">Description</label>
