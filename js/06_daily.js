@@ -1,6 +1,7 @@
 /**
- * SCMS v10.2 — 06_daily.js
+ * SCMS v11 — 06_daily.js
  * Daily reports: list view + modal form + save via n8n TWA.
+ * Same logic as v10 but uses the smart student picker when teacher taps + (FAB).
  */
 
 'use strict';
@@ -27,10 +28,10 @@ function _renderDailyClassChips() {
     return;
   }
 
-  if (!_dailyClass) _dailyClass = classes[0];
+  if (!_dailyClass || !classes.includes(_dailyClass)) _dailyClass = classes[0];
 
   el.innerHTML = classes.map(c =>
-    `<button class="chip${c === _dailyClass ? ' active' : ''}" onclick="selectDailyClass('${c}')">${c}</button>`
+    `<button class="chip${c === _dailyClass ? ' active' : ''}" data-class="${esc(c)}" onclick="selectDailyClass('${esc(c)}')">${esc(c)}</button>`
   ).join('');
 
   _renderDailyList(_dailyClass);
@@ -39,7 +40,7 @@ function _renderDailyClassChips() {
 window.selectDailyClass = function(cls) {
   _dailyClass = cls;
   document.querySelectorAll('#dailyClassChips .chip').forEach(b =>
-    b.classList.toggle('active', b.textContent.trim() === cls)
+    b.classList.toggle('active', b.dataset.class === cls)
   );
   _renderDailyList(cls);
 };
@@ -67,25 +68,26 @@ function _renderDailyList(cls) {
     const mood = report?.mood || '';
     const moodMap = { Happy: '😊', OK: '😐', Tired: '😴', Sad: '😢', Energetic: '⚡' };
     const moodIcon = moodMap[mood] || mood;
+    const homeHex = s.home_color ? homeColorHex(s.home_color) : '#4F46E5';
 
     return `
       <div class="list-card ${done ? 'card-done' : ''}">
         <div class="card-row">
-          <div class="card-avatar">${(s.name_en || '?')[0]}</div>
+          <div class="card-avatar" style="background:${homeHex}">${esc((s.name_en || '?')[0])}</div>
           <div class="card-info">
-            <div class="card-name">${s.name_en || s.name_local}</div>
+            <div class="card-name">${esc(s.name_en || s.name_local)}</div>
             ${done
-              ? `<div class="card-sub">${moodIcon} ${mood} · Meal: ${report.meal || '—'} · Nap: ${report.nap_min ?? '—'}min</div>`
+              ? `<div class="card-sub">${moodIcon} ${esc(mood)} · Meal: ${esc(report.meal || '—')} · Nap: ${report.nap_min ?? '—'}min</div>`
               : `<div class="card-sub card-sub-pending">Report not yet filled</div>`
             }
           </div>
           <button class="btn-icon-round ${done ? 'btn-edit' : 'btn-add'}"
-            onclick="openDailyModal('${s.student_id}','${s.name_en || s.name_local}')">
+            onclick="openDailyModal('${esc(s.student_id)}','${esc(s.name_en || s.name_local)}')">
             ${done ? '✎' : '+'}
           </button>
         </div>
         ${done && report.behaviour_note
-          ? `<div class="card-note">${report.behaviour_note}</div>`
+          ? `<div class="card-note">${esc(report.behaviour_note)}</div>`
           : ''}
       </div>`;
   }).join('');
@@ -106,13 +108,13 @@ window.openDailyModal = function(studentId, studentName) {
   const html = `
     <div class="modal-sheet" onclick="event.stopPropagation()">
       <div class="modal-handle"></div>
-      <h3 class="modal-title">Daily Report — ${studentName}</h3>
+      <h3 class="modal-title">Daily Report — ${esc(studentName)}</h3>
 
       <label class="field-label">Meal today</label>
       <div class="pill-group" id="mealPills">
         ${meals.map(m => `
-          <button class="pill ${existing?.meal === m ? 'active' : ''}"
-            onclick="togglePill(this,'mealPills')">${m}</button>`).join('')}
+          <button type="button" class="pill ${existing?.meal === m ? 'active' : ''}"
+            onclick="togglePill(this,'mealPills')">${esc(m)}</button>`).join('')}
       </div>
 
       <label class="field-label">Nap (minutes)</label>
@@ -122,24 +124,24 @@ window.openDailyModal = function(studentId, studentName) {
       <label class="field-label">Mood</label>
       <div class="pill-group" id="moodPills">
         ${moods.map(m => `
-          <button class="pill ${existing?.mood === m ? 'active' : ''}"
-            onclick="togglePill(this,'moodPills')">${moodEmoji[m]} ${m}</button>`).join('')}
+          <button type="button" class="pill ${existing?.mood === m ? 'active' : ''}"
+            onclick="togglePill(this,'moodPills')">${moodEmoji[m]} ${esc(m)}</button>`).join('')}
       </div>
 
       <label class="field-label">Behaviour note <span class="optional">(optional)</span></label>
       <textarea class="form-textarea" id="noteInput" rows="3"
-        placeholder="e.g. Very focused today, helped classmates…">${existing?.behaviour_note || ''}</textarea>
+        placeholder="e.g. Very focused today, helped classmates…">${esc(existing?.behaviour_note || '')}</textarea>
 
       <label class="field-label">Toilet OK? <span class="optional">(optional)</span></label>
       <div class="pill-group" id="toiletPills">
-        <button class="pill ${existing?.toilet_ok === true ? 'active' : ''}"
+        <button type="button" class="pill ${existing?.toilet_ok === true ? 'active' : ''}"
           onclick="togglePill(this,'toiletPills')">✓ Yes</button>
-        <button class="pill ${existing?.toilet_ok === false ? 'active' : ''}"
+        <button type="button" class="pill ${existing?.toilet_ok === false ? 'active' : ''}"
           onclick="togglePill(this,'toiletPills')">✗ No</button>
       </div>
 
       <button class="btn-primary mt16" id="saveDailyBtn"
-        onclick="saveDailyReport('${studentId}','${studentName}')">
+        onclick="saveDailyReport('${esc(studentId)}','${esc(studentName)}')">
         Save Report
       </button>
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -167,10 +169,11 @@ window.saveDailyReport = async function(studentId, studentName) {
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
+  const stu = window.APP.students.find(s => s.student_id === studentId);
   const data = {
     student_id:     studentId,
     name_en:        studentName,
-    class:          _dailyClass || '',
+    class:          stu?.class || _dailyClass || '',
     date:           new Date().toISOString().slice(0, 10),
     meal,
     nap_min:        parseInt(napRaw, 10) || 0,
@@ -184,7 +187,6 @@ window.saveDailyReport = async function(studentId, studentName) {
   try {
     await API.saveDailyReport(data);
 
-    // Update local cache
     window.APP.dailyReports = window.APP.dailyReports.filter(
       r => !(r.student_id === studentId && r.date === data.date)
     );
@@ -204,4 +206,12 @@ window.saveDailyReport = async function(studentId, studentName) {
   }
 };
 
-window.openDailyReportModal = openDailyModal.bind(null, '', '');
+// FAB entry point — open the student picker first, then jump into the modal
+window.openDailyReportModal = function() {
+  openStudentPicker({
+    title:       'Daily Report — choose a student',
+    subtitle:    'For ' + new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }),
+    classFilter: _dailyClass || 'All',
+    onPick:      (s) => openDailyModal(s.student_id, s.name_en || s.name_local),
+  });
+};
