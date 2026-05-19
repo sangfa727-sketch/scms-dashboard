@@ -1,160 +1,302 @@
 /**
- * SCMS v11 — 03_utils.js
- * Shared utility functions.
+ * SCMS v11 — 02_api.js
+ * All data operations. Read = Supabase anon. Write = n8n TWA webhook.
+ * Every call automatically includes school_id + teacher_id + platform from APP context.
  */
 
 'use strict';
 
-/** Format ISO date as "Mon 12 Jan" */
-window.fmtDate = function(iso) {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleDateString('en-US', { weekday:'short', day:'numeric', month:'short' });
-  } catch { return iso; }
+const API = {
+
+  // ─── BOOTSTRAP ───────────────────────────────────────────────────────────
+
+  async bootstrap(telegram_id, school_id) {
+    const resp = await fetch(SCMS_CONFIG.N8N_BOOTSTRAP, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        action:      'bootstrap',
+        telegram_id,
+        school_id:   school_id || undefined,
+        initData:    window.APP.initData,
+        platform:    window.APP.platform,
+      }),
+    });
+    if (!resp.ok) throw new Error(`Bootstrap failed: ${resp.status}`);
+    return resp.json();
+  },
+
+  // ─── ATTENDANCE ──────────────────────────────────────────────────────────
+
+  async saveAttendance(cls, date, records) {
+    return twaPost('save_attendance', { class: cls, date, records });
+  },
+
+  async getAttendance(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
+    return sbQuery('attendance',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc,class`);
+  },
+
+  // ─── STUDENTS ────────────────────────────────────────────────────────────
+
+  async getStudents() {
+    return sbQuery('students',
+      `school_id=eq.${window.APP.school_id}&status=eq.Active&order=class,name_en`);
+  },
+
+  /** Register new student — server generates student_id + parent-link token. */
+  async registerStudent(data) {
+    return twaPost('register_student', data);
+  },
+
+  /** Edit / update an existing student.
+   *  Backend has no `update_student` TWA route yet — we PATCH Supabase directly
+   *  (allowed by RLS for authenticated reads). For best results, replicate
+   *  fields the bot's `/editstudent` wizard supports. */
+  async updateStudent(studentId, patch) {
+    // Whitelist fields that exist in the DB schema (matches Apply Student Edit)
+    const allowed = ['name_en', 'name_mm', 'name_local', 'class', 'grade',
+                     'gender', 'date_of_birth', 'parent_name', 'parent_phone',
+                     'parent_tg_id', 'status', 'parent_email', 'home_color'];
+    const clean = {};
+    for (const k of allowed) if (k in patch) clean[k] = patch[k];
+    clean.updated_at = new Date().toISOString();
+
+    const url = `${SCMS_CONFIG.SUPABASE_URL}/rest/v1/students`
+              + `?student_id=eq.${encodeURIComponent(studentId)}`
+              + `&school_id=eq.${encodeURIComponent(window.APP.school_id)}`;
+    const resp = await fetch(url, {
+      method:  'PATCH',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SCMS_CONFIG.SUPABASE_ANON,
+        'Authorization': `Bearer ${SCMS_CONFIG.SUPABASE_ANON}`,
+        'Prefer':        'return=representation',
+      },
+      body: JSON.stringify(clean),
+    });
+    if (!resp.ok) {
+      const t = await resp.text();
+      throw new Error(`update_student failed (${resp.status}): ${t}`);
+    }
+    const rows = await resp.json();
+    return { ok: true, success: true, student: rows[0] || null };
+  },
+
+  /** Soft-delete (status=Inactive) — admin only.
+   *  Backend has no TWA route; we PATCH Supabase directly. */
+  async deleteStudent(studentId) {
+    const url = `${SCMS_CONFIG.SUPABASE_URL}/rest/v1/students`
+              + `?student_id=eq.${encodeURIComponent(studentId)}`
+              + `&school_id=eq.${encodeURIComponent(window.APP.school_id)}`;
+    const resp = await fetch(url, {
+      method:  'PATCH',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SCMS_CONFIG.SUPABASE_ANON,
+        'Authorization': `Bearer ${SCMS_CONFIG.SUPABASE_ANON}`,
+      },
+      body: JSON.stringify({
+        status: 'Inactive',
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    if (!resp.ok) {
+      const t = await resp.text();
+      throw new Error(`delete_student failed (${resp.status}): ${t}`);
+    }
+    return { ok: true, success: true };
+  },
+
+  /** Poll Supabase to see if the bot has captured the parent's Telegram ID
+   *  (via the `/start parent_<STU-id>` deep link → `Update Parent TG ID` node).
+   *  Returns { parent_tg_id, parent_name } once linked, else { parent_tg_id: null }. */
+  async checkParentLink(studentId) {
+    const url = `${SCMS_CONFIG.SUPABASE_URL}/rest/v1/students`
+              + `?student_id=eq.${encodeURIComponent(studentId)}`
+              + `&school_id=eq.${encodeURIComponent(window.APP.school_id)}`
+              + `&select=parent_tg_id,parent_name`;
+    const resp = await fetch(url, {
+      headers: {
+        'apikey':        SCMS_CONFIG.SUPABASE_ANON,
+        'Authorization': `Bearer ${SCMS_CONFIG.SUPABASE_ANON}`,
+      },
+    });
+    if (!resp.ok) return { parent_tg_id: null };
+    const rows = await resp.json();
+    const r = rows[0] || {};
+    const tg = r.parent_tg_id ? String(r.parent_tg_id).trim() : '';
+    return {
+      ok: true,
+      parent_tg_id: tg || null,
+      parent_name:  r.parent_name || null,
+    };
+  },
+
+  /** Update the school logo.
+   *  Reuses the existing `update_school_config` TWA route — backend stores
+   *  the data URL inside `schools.config_json.school_logo` (or wherever your
+   *  rpc_update_school_config writes patches). */
+  async updateSchoolLogo(logoDataUrl) {
+    return twaPost('update_school_config', {
+      school_id: window.APP.school_id,
+      patch: { school_logo: logoDataUrl || null },
+    });
+  },
+
+  // ─── STAFF CHAT (native-only) ─────────────────────────────────────────────
+  // Reads come straight from Supabase; writes go through the chat_send TWA
+  // route (you must add this on the backend — see README).
+
+  // ─── DAILY REPORTS ───────────────────────────────────────────────────────
+
+  async saveDailyReport(data) {
+    return twaPost('save_daily_report', {
+      ...data,
+      date: data.date || new Date().toISOString().slice(0, 10),
+    });
+  },
+
+  async getDailyReports(daysBack = 7) {
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
+    return sbQuery('daily_reports',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc,name_en`);
+  },
+
+  // ─── HOMEWORK ────────────────────────────────────────────────────────────
+
+  async saveHomework(data) {
+    return twaPost('save_homework', {
+      ...data,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      school_id:  window.APP.school_id,
+      teacher_id: window.APP.teacher_id,
+    });
+  },
+
+  async getHomework(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
+    return sbQuery('homework_log',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc`);
+  },
+
+  // ─── INCIDENTS ───────────────────────────────────────────────────────────
+
+  async saveIncident(data) {
+    return twaPost('save_incident', {
+      ...data,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      school_id:  window.APP.school_id,
+      teacher_id: window.APP.teacher_id,
+    });
+  },
+
+  async getIncidents(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
+    return sbQuery('incidents',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc`);
+  },
+
+  // ─── PARENT COMMS ────────────────────────────────────────────────────────
+
+  async sendParentComm(data) {
+    return twaPost('send_parent_comm', {
+      ...data,
+      school_id:  window.APP.school_id,
+      teacher_id: window.APP.teacher_id,
+    });
+  },
+
+  async getParentComms(daysBack = 30) {
+    const since = new Date(Date.now() - daysBack * 86400000).toISOString().slice(0, 10);
+    return sbQuery('parent_comms',
+      `school_id=eq.${window.APP.school_id}&date=gte.${since}&order=date.desc`);
+  },
+
+  // ─── TIMETABLE ───────────────────────────────────────────────────────────
+
+  async getTimetable() {
+    return sbQuery('timetable',
+      `school_id=eq.${window.APP.school_id}&order=day,period`);
+  },
+
+  // ─── MONTHLY SUMMARY ─────────────────────────────────────────────────────
+
+  async getMonthlySummary(yearMonth) {
+    const ym = yearMonth || new Date().toISOString().slice(0, 7);
+    return sbQuery('monthly_summary',
+      `school_id=eq.${window.APP.school_id}&year_month=eq.${ym}&order=class,name_en`);
+  },
+
+  // ─── SCHOOL CONFIG ───────────────────────────────────────────────────────
+
+  async updateSchoolConfig(patch) {
+    return twaPost('update_school_config', { patch });
+  },
+
+  // ─── STAFF CHAT (native app only — hidden in TWA) ────────────────────────
+  // Reads: direct Supabase query on `chat_messages` table.
+  // Writes: TWA `chat_send` action (backend must add this route — see README).
+
+  async getChatMessages(channel = 'staff', limit = 50) {
+    const url = `${SCMS_CONFIG.SUPABASE_URL}/rest/v1/chat_messages`
+              + `?school_id=eq.${encodeURIComponent(window.APP.school_id)}`
+              + `&channel=eq.${encodeURIComponent(channel)}`
+              + `&order=created_at.desc&limit=${Number(limit) || 50}`;
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'apikey':        SCMS_CONFIG.SUPABASE_ANON,
+          'Authorization': `Bearer ${SCMS_CONFIG.SUPABASE_ANON}`,
+        },
+      });
+      if (!resp.ok) return [];
+      const rows = await resp.json();
+      // Return oldest-first so the UI can append normally
+      return Array.isArray(rows) ? rows.reverse() : [];
+    } catch (err) {
+      console.warn('[chat] read failed', err);
+      return [];
+    }
+  },
+
+  async sendChatMessage(channel, text) {
+    return twaPost('chat_send', {
+      channel,
+      text,
+      // Server fills these in too, but echoing them helps if the route is a
+      // thin Supabase passthrough.
+      teacher_id:   window.APP.teacher_id,
+      teacher_name: window.APP.teacher_name,
+      created_at:   new Date().toISOString(),
+    });
+  },
+
+  // ─── REFRESH ALL ─────────────────────────────────────────────────────────
+
+  async refreshAll() {
+    const [students, attendance, dailyReports, homework, parentComms, incidents, timetable] =
+      await Promise.allSettled([
+        API.getStudents(),
+        API.getAttendance(30),
+        API.getDailyReports(30),
+        API.getHomework(30),
+        API.getParentComms(30),
+        API.getIncidents(30),
+        API.getTimetable(),
+      ]);
+
+    if (students.status     === 'fulfilled') window.APP.students     = students.value     || [];
+    if (attendance.status   === 'fulfilled') window.APP.attendance   = attendance.value   || [];
+    if (dailyReports.status === 'fulfilled') window.APP.dailyReports = dailyReports.value || [];
+    if (homework.status     === 'fulfilled') window.APP.homework     = homework.value     || [];
+    if (parentComms.status  === 'fulfilled') window.APP.parentComms  = parentComms.value  || [];
+    if (incidents.status    === 'fulfilled') window.APP.incidents    = incidents.value    || [];
+    if (timetable.status    === 'fulfilled') window.APP.timetable    = timetable.value    || [];
+
+    return window.APP;
+  },
 };
 
-/** Format ISO date as "Jan 12, 2017" */
-window.fmtDateLong = function(iso) {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
-  } catch { return iso; }
-};
-
-/** Compute age in years from an ISO birthday. */
-window.computeAge = function(birthday) {
-  if (!birthday) return null;
-  const b = new Date(birthday);
-  if (isNaN(b.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - b.getFullYear();
-  const m = now.getMonth() - b.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
-  return age;
-};
-
-/** Days until next birthday — useful for "🎂 in 3 days" badges. */
-window.daysUntilBirthday = function(birthday) {
-  if (!birthday) return null;
-  const b = new Date(birthday);
-  if (isNaN(b.getTime())) return null;
-  const now = new Date();
-  const next = new Date(now.getFullYear(), b.getMonth(), b.getDate());
-  if (next < now) next.setFullYear(now.getFullYear() + 1);
-  return Math.ceil((next - now) / 86400000);
-};
-
-/** Short relative time: "2h ago", "Yesterday", etc. */
-window.relTime = function(iso) {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m <   2) return 'Just now';
-  if (m <  60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h <  24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d ===  1) return 'Yesterday';
-  if (d <    7) return `${d} days ago`;
-  return fmtDate(iso);
-};
-
-/** Debounce helper */
-window.debounce = function(fn, ms = 300) {
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-};
-
-/** Escape HTML to prevent injection in dynamic strings. */
-window.esc = function(str) {
-  return String(str ?? '').replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]
-  );
-};
-
-/** Group array by key */
-window.groupBy = function(arr, key) {
-  return arr.reduce((acc, item) => {
-    const k = item[key] || 'Other';
-    (acc[k] = acc[k] || []).push(item);
-    return acc;
-  }, {});
-};
-
-/** Attendance rate % */
-window.attendRate = function(studentId, days = 30) {
-  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-  const records = window.APP.attendance.filter(
-    a => a.student_id === studentId && a.date >= since
-  );
-  if (!records.length) return null;
-  const present = records.filter(a => ['P', 'H'].includes(a.status)).length;
-  return Math.round((present / records.length) * 100);
-};
-
-/** Validate email (loose RFC-ish check) */
-window.isValidEmail = function(s) {
-  if (!s) return false;
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
-};
-
-/** Validate phone (digits, +, -, space, parentheses, 5+ chars) */
-window.isValidPhone = function(s) {
-  if (!s) return false;
-  const digits = s.replace(/[^\d]/g, '');
-  return digits.length >= 5;
-};
-
-/** Predefined "home colors" — the colour assigned to a student's house/team.
- *  Picked as accessible, distinct hues that look good on both light and dark themes. */
-window.HOME_COLORS = [
-  { id: 'red',     name: 'Red',     hex: '#DC2626' },
-  { id: 'orange',  name: 'Orange',  hex: '#EA580C' },
-  { id: 'amber',   name: 'Amber',   hex: '#D97706' },
-  { id: 'yellow',  name: 'Yellow',  hex: '#CA8A04' },
-  { id: 'lime',    name: 'Lime',    hex: '#65A30D' },
-  { id: 'green',   name: 'Green',   hex: '#059669' },
-  { id: 'teal',    name: 'Teal',    hex: '#0D9488' },
-  { id: 'cyan',    name: 'Cyan',    hex: '#0891B2' },
-  { id: 'sky',     name: 'Sky',     hex: '#0284C7' },
-  { id: 'blue',    name: 'Blue',    hex: '#2563EB' },
-  { id: 'indigo',  name: 'Indigo',  hex: '#4F46E5' },
-  { id: 'violet',  name: 'Violet',  hex: '#7C3AED' },
-  { id: 'fuchsia', name: 'Fuchsia', hex: '#C026D3' },
-  { id: 'pink',    name: 'Pink',    hex: '#DB2777' },
-  { id: 'rose',    name: 'Rose',    hex: '#E11D48' },
-  { id: 'slate',   name: 'Slate',   hex: '#475569' },
-];
-
-/** Lookup the hex value for a home_color id; returns a neutral grey for unknown. */
-window.homeColorHex = function(id) {
-  const c = window.HOME_COLORS.find(c => c.id === id);
-  return c ? c.hex : '#8A8A82';
-};
-
-/** Lookup the display name for a home_color id. */
-window.homeColorName = function(id) {
-  const c = window.HOME_COLORS.find(c => c.id === id);
-  return c ? c.name : (id || '—');
-};
-
-/** Friendly attendance code dictionary.
- *  Used everywhere we need to translate a single-letter code (P/A/L/T/S/E/H)
- *  into a human-readable label. Falls back to the code itself if not found. */
-window.ATTENDANCE_CODE_LABELS = {
-  P: { label: 'Present',  short: 'Pres',  color: '#10B981', desc: 'Student is here'              },
-  A: { label: 'Absent',   short: 'Abs',   color: '#EF4444', desc: 'Unexcused absence'            },
-  L: { label: 'Leave',    short: 'Lv',    color: '#3B82F6', desc: 'Approved leave / on holiday'  },
-  T: { label: 'Tardy',    short: 'Late',  color: '#F59E0B', desc: 'Arrived late'                 },
-  S: { label: 'Sick',     short: 'Sick',  color: '#DC2626', desc: 'Out sick'                     },
-  E: { label: 'Excused',  short: 'Exc',   color: '#0891B2', desc: 'Excused absence'              },
-  H: { label: 'Half-day', short: '½ day', color: '#7C3AED', desc: 'Attended only part of the day'},
-};
-
-window.attendCodeLabel = function(code) {
-  return window.ATTENDANCE_CODE_LABELS[code]?.label || code || '—';
-};
-
-window.attendCodeColor = function(code) {
-  return window.ATTENDANCE_CODE_LABELS[code]?.color || '#8A8A82';
-};
+window.API = API;
