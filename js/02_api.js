@@ -11,19 +11,47 @@ const API = {
   // ─── BOOTSTRAP ───────────────────────────────────────────────────────────
 
   async bootstrap(telegram_id, school_id) {
-    const resp = await fetch(SCMS_CONFIG.N8N_BOOTSTRAP, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        action:      'bootstrap',
-        telegram_id,
-        school_id:   school_id || undefined,
-        initData:    window.APP.initData,
-        platform:    window.APP.platform,
-      }),
-    });
-    if (!resp.ok) throw new Error(`Bootstrap failed: ${resp.status}`);
-    return resp.json();
+    const initData = window.APP.initData || '';
+    const body = {
+      action:        'bootstrap',
+      telegram_id,
+      school_id:     school_id || undefined,
+      // Send under BOTH key names so the backend works whether it expects
+      // `initData` (v10 convention) or `tg_init_data` (n8n convention).
+      initData,
+      tg_init_data:  initData,
+      platform:      window.APP.platform,
+    };
+
+    console.log('[API.bootstrap] POST', SCMS_CONFIG.N8N_BOOTSTRAP);
+    console.log('[API.bootstrap] body keys:', Object.keys(body));
+    console.log('[API.bootstrap] telegram_id:', telegram_id, 'has initData:', !!initData);
+
+    let resp;
+    try {
+      resp = await fetch(SCMS_CONFIG.N8N_BOOTSTRAP, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+    } catch (netErr) {
+      // Network / CORS / DNS failure
+      throw new Error('Network error: ' + (netErr.message || netErr));
+    }
+
+    if (!resp.ok) {
+      let txt = '';
+      try { txt = await resp.text(); } catch (_) {}
+      throw new Error(`HTTP ${resp.status} ${resp.statusText} ${txt.slice(0, 200)}`);
+    }
+
+    let json;
+    try {
+      json = await resp.json();
+    } catch (e) {
+      throw new Error('Server returned non-JSON response');
+    }
+    return json;
   },
 
   // ─── ATTENDANCE ──────────────────────────────────────────────────────────
