@@ -1,14 +1,12 @@
 /**
- * SCMS v10.2 — 10_timetable.js
+ * SCMS v11 — 10_timetable.js
  * Weekly timetable view with day tabs.
  */
 
 'use strict';
 
 const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
-let _ttDay = DAYS[Math.min(new Date().getDay() - 1, 4)];
-if (_ttDay < 0 || isNaN(_ttDay)) _ttDay = DAYS[0];
-if (typeof _ttDay === 'number') _ttDay = DAYS[_ttDay] || DAYS[0];
+let _ttDay = DAYS[Math.min(Math.max(new Date().getDay() - 1, 0), 4)];
 
 function renderTimetable() {
   _renderDayTabs();
@@ -19,18 +17,18 @@ function _renderDayTabs() {
   const el = document.getElementById('dayTabs');
   if (!el) return;
 
-  const today = DAYS[Math.min(new Date().getDay() - 1, 4)];
+  const today = DAYS[Math.min(Math.max(new Date().getDay() - 1, 0), 4)];
 
   el.innerHTML = DAYS.map(d => `
     <button class="day-tab ${d === _ttDay ? 'active' : ''} ${d === today ? 'today' : ''}"
-      onclick="selectTtDay('${d}')">${d.slice(0,3)}</button>
+      data-day="${d}" onclick="selectTtDay('${d}')">${d.slice(0,3)}</button>
   `).join('');
 }
 
 window.selectTtDay = function(day) {
   _ttDay = day;
   document.querySelectorAll('.day-tab').forEach(b =>
-    b.classList.toggle('active', b.textContent === day.slice(0,3))
+    b.classList.toggle('active', b.dataset.day === day)
   );
   _renderTtList();
 };
@@ -38,7 +36,7 @@ window.selectTtDay = function(day) {
 function _renderTtClassChips() {
   const el = document.getElementById('ttClassChips');
   if (!el) return;
-  el.innerHTML = ''; // Class chips optional — show all by default
+  el.innerHTML = '';
   _renderTtList();
 }
 
@@ -56,12 +54,12 @@ function _renderTtList() {
 
   el.innerHTML = entries.map(t => `
     <div class="tt-row">
-      <div class="tt-period">${t.period || '?'}</div>
+      <div class="tt-period">${esc(String(t.period || '?'))}</div>
       <div class="tt-info">
-        <div class="tt-subject">${t.subject || '—'}</div>
-        <div class="tt-meta">${t.class || '—'} ${t.room ? '· Room ' + t.room : ''}</div>
+        <div class="tt-subject">${esc(t.subject || '—')}</div>
+        <div class="tt-meta">${esc(t.class || '—')} ${t.room ? '· Room ' + esc(t.room) : ''}</div>
       </div>
-      <div class="tt-time">${t.start_time || ''}</div>
+      <div class="tt-time">${esc(t.start_time || '')}</div>
     </div>`
   ).join('');
 
