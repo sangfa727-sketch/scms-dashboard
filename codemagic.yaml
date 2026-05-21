@@ -2,16 +2,19 @@ workflows:
   android-capacitor-build:
     name: SCMS Android APK Build
     max_build_duration: 15
-    instance_type: mac_mini_m1
+    instance_type: mac_mini_m2
     environment:
       node: 24
-      xcode: latest
     scripts:
+      - name: Create www Folder and Copy Files
+        script: |
+          mkdir -p www
+          cp -r js index.html style.css www/
       - name: Install Dependencies
         script: npm install
-      - name: Install Capacitor CLI & Core
+      - name: Install Capacitor Core
         script: npm install @capacitor/cli @capacitor/core @capacitor/android
-      - name: Setup Capacitor Config if folder missing
+      - name: Add Android Platform if missing
         script: |
           if [ ! -d "android" ]; then
             npx cap add android
