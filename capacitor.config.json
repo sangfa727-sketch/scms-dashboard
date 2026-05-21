@@ -1,7 +1,7 @@
 {
   "appId": "com.scms.app",
-  "appName": "SCMS",
-  "webDir": ".",
+  "appName": "SCMS Dashboard",
+  "webDir": "www",
   "server": {
     "androidScheme": "https",
     "iosScheme": "https",
