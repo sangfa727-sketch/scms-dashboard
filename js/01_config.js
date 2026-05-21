@@ -25,15 +25,15 @@ const SCMS_CONFIG = {
   SUPABASE_ANON:   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzemdicnl1Y3F3bXJkYnNnd2JiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA4MjkzNjcsImV4cCI6MjA4NjQwNTM2N30.PLACEHOLDER_ANON_KEY',
 
   // n8n TWA webhook (all write operations)
-  N8N_WEBHOOK:     'https://your-n8n-instance.com/webhook/scms-twa',
+  N8N_WEBHOOK:     'https://stailla.xyz/webhook/scms-twa',
 
   // n8n Bootstrap webhook (initial session resolve)
-  N8N_BOOTSTRAP:   'https://your-n8n-instance.com/webhook/scms-bootstrap',
+  N8N_BOOTSTRAP:   'https://stailla.xyz/webhook/scms-bootstrap',
 
   // Telegram bot username — used to build deep-links for parent TG ID capture
   // e.g. https://t.me/<BOT_USERNAME>?start=parent_STU-XXXXXX
   // Backend (n8n Merge Pre-State) parses regex: /^\/start\s+parent_(STU-[A-Z0-9]+)/i
-  BOT_USERNAME:    'YourSchoolBot',
+  BOT_USERNAME:    'VavidaISBbot',
 
   // App version
   VERSION: '11.0.0',
