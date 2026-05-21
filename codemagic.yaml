@@ -11,14 +11,12 @@ workflows:
         script: npm install
       - name: Install Capacitor CLI & Core
         script: npm install @capacitor/cli @capacitor/core @capacitor/android
-      - name: Build Web Project
-        script: npm run build
-      - name: Add Android Platform if missing
+      - name: Setup Capacitor Config if folder missing
         script: |
           if [ ! -d "android" ]; then
             npx cap add android
           fi
-      - name: Sync Android Configuration
+      - name: Sync Directly to Android
         script: npx cap sync android
       - name: Build Android Debug APK
         script: |
