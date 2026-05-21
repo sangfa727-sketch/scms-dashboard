@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCMS Database Connection Tester</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .card { background: #1e1e1e; padding: 20px; border-radius: 8px; max-width: 600px; margin: auto; }
+        button { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #006699; }
+        .log { background: #000; padding: 15px; border-radius: 5px; font-family: monospace; margin-top: 20px; max-height: 300px; overflow-y: auto; }
+        .success { color: #4caf50; }
+        .error { color: #f44336; font-weight: bold; }
+        .info { color: #2196f3; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>📊 SCMS Supabase Auth Tester</h2>
+    <p>ဒီ Tool က app_sessions table ထဲကို ဒေတာ သွင်း/ထုတ် လုပ်လို့ ရ၊ မရ စစ်ပေးမှာ ဖြစ်ပါတယ်။</p>
+    
+    <button onclick="runDiagnosticTest()">🚀 Run Diagnostic Test</button>
+    
+    <div class="log" id="testLog">စမ်းသပ်ရန် ခလုတ်ကို နှိပ်ပါ...</div>
+</div>
+
+<script>
+    // ဆရာ့ App ရဲ့ Config အတိုင်း အောက်ပါ URL နဲ့ Key ကို ဖြည့်ပေးပါ ဆရာ
+    const CONFIG = {
+        SUPABASE_URL: "https://your-supabase-project.supabase.co", // ဆရာ့ Supabase URL ထည့်ရန်
+        SUPABASE_ANON: "eyJhbGciOi..." // ဆရာ့ Anon/Public Key ထည့်ရန်
+    };
+
+    const logEl = document.getElementById('testLog');
+
+    function log(message, type = 'info') {
+        const span = document.createElement('span');
+        span.className = type;
+        span.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}<br>`;
+        logEl.appendChild(span);
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function runDiagnosticTest() {
+        logEl.innerHTML = ''; // Clear log
+        log("🔍 Supabase စစ်ဆေးခြင်း လုပ်ငန်းစဉ် စတင်ပါပြီ...", 'info');
+
+        const testToken = "test_token_" + Math.random().toString(36).substr(2, 9);
+        const url = `${CONFIG.SUPABASE_URL}/rest/v1/app_sessions`;
+
+        // -------------------------------------------------------------
+        // STEP 1: Insert Test (RLS check for Anon POST)
+        // -------------------------------------------------------------
+        log(`⚡ Step 1: Token အတု (${testToken}) အား Table ထဲသို့ Insert လုပ်ကြည့်ခြင်း...`, 'info');
+        
+        try {
+            const insertResp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': CONFIG.SUPABASE_ANON,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    token: testToken,
+                    status: 'pending',
+                    device_ua: 'Diagnostic Tester',
+                    created_at: new Date().toISOString()
+                })
+            });
+
+            if (insertResp.ok) {
+                log("✅ အောင်မြင်ပါသည်။ Anon User က ဒေတာအသစ် Insert လုပ်ခွင့် ရှိပါတယ် (RLS OK)။", "success");
+            } else {
+                const errText = await insertResp.text();
+                log(`❌ Insert မအောင်မြင်ပါ။ Status Code: ${insertResp.status}`, "error");
+                log(`💡 အကြံပြုချက်: Supabase > Authentication > Policies မှာ anon role အတွက် app_sessions ထဲကို INSERT လုပ်ခွင့် ပေးထားခြင်း ရှိ၊ မရှိ စစ်ဆေးပါ သို့မဟုတ် RLS ခေတ္တပိတ်ပါ။ (Error: ${errText})`, "error");
+                return; // Stop test
+            }
+        } catch (e) {
+            log(`❌ Connection Error: Supabase URL မှားနေနိုင်ပါသည် သို့မဟုတ် Internet ပြတ်နေပါသည်။ (${e.message})`, "error");
+            return;
+        }
+
+        // -------------------------------------------------------------
+        // STEP 2: Select Test (Polling Check)
+        // -------------------------------------------------------------
+        log("⚡ Step 2: ခုနက သွင်းလိုက်တဲ့ Token အား Polling စနစ်အတိုင်း ပြန်ဆွဲထုတ်ကြည့်ခြင်း...", 'info');
+        
+        try {
+            const selectUrl = `${url}?token=eq.${testToken}&select=token,status,telegram_id`;
+            const selectResp = await fetch(selectUrl, {
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON}`
+                }
+            });
+
+            if (selectResp.ok) {
+                const data = await selectResp.json();
+                if (data && data.length > 0) {
+                    log(`✅ အောင်မြင်ပါသည်။ Row ကို ပြန်ရှာတွေ့ပြီး Status သည် '${data[0].status}' ဖြစ်ပါသည်။`, "success");
+                    log(`ℹ️ လက်ရှိ telegram_id: ${data[0].telegram_id || 'null (စောင့်ဆိုင်းဆဲ)'}`, "info");
+                } else {
+                    log("❌ Error: သွင်းထားတဲ့ Row ကို ပြန်ရှာမတွေ့ပါ။ ဒေတာ ပျောက်ဆုံးသွားပါသည်။", "error");
+                    log("💡 အကြံပြုချက်: Supabase RLS Policy က SELECT လုပ်ခွင့်ကို ပိတ်ထားတာ ဖြစ်နိုင်ပါတယ်ဗျာ။", "error");
+                    return;
+                }
+            } else {
+                log(`❌ Select (Read) မအောင်မြင်ပါ။ Status: ${selectResp.status}`, "error");
+                return;
+            }
+        } catch (e) {
+            log(`❌ Read Error: ${e.message}`, "error");
+            return;
+        }
+
+        // -------------------------------------------------------------
+        // STEP 3: Final Verdict
+        // -------------------------------------------------------------
+        log("🎉 [စစ်ဆေးမှု ရလဒ်ကောက်ချက်] 🎉", "info");
+        log("Supabase Database ဘက်က Anon Access နဲ့ RLS ကတော့ ၁၀၀% ပုံမှန် အလုပ်လုပ်နေပါတယ် ဆရာ။", "success");
+        log("ဒါဆိုရင် ပြဿနာက n8n ဘက်က ဒေတာကို 'Update' မလုပ်ပေးဘဲ 'Insert' အသစ်လုပ်မိနေတာ (သို့မဟုတ်) Token String မကိုက်ညီတာမျိုး ဖြစ်ဖို့ များသွားပါပြီ ဆရာဗျာ။ n8n workflow ကို တစ်ချက် စစ်ကြည့်ပေးပါဦး။", "info");
+    }
+</script>
+
+</body>
+</html>
