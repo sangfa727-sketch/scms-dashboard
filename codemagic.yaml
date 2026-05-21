@@ -1,0 +1,28 @@
+workflows:
+  android-capacitor-build:
+    name: SCMS Android APK Build
+    max_build_duration: 15
+    instance_type: mac_mini_m1
+    environment:
+      node: 24
+      xcode: latest
+    scripts:
+      - name: Install Dependencies
+        script: npm install
+      - name: Install Capacitor CLI & Core
+        script: npm install @capacitor/cli @capacitor/core @capacitor/android
+      - name: Build Web Project
+        script: npm run build
+      - name: Add Android Platform if missing
+        script: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+      - name: Sync Android Configuration
+        script: npx cap sync android
+      - name: Build Android Debug APK
+        script: |
+          cd android
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
