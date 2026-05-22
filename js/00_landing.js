@@ -1,39 +1,17 @@
 /**
- * SCMS v11 — 00_landing.js
- * Landing screen + Telegram-based login flow.
- *
- * When the app is opened OUTSIDE Telegram (native Capacitor app or plain web),
- * the user has no Telegram WebApp session to authenticate them. We show a
- * landing page with three actions:
- *
- *   1. "Sign in with Telegram"  → opens Telegram bot with /start app_login_<token>.
- *      The bot writes { token, teacher_id, school_id } into the `app_sessions`
- *      Supabase table; the app polls every 2 s and bootstraps when it finds
- *      its token. The token is then stored in localStorage so future launches
- *      auto-login.
- *
- *   2. "Register a new school"  → opens Telegram with /register_school
- *      (existing wizard in the n8n flow, no change needed).
- *
- *   3. "Join existing school"   → opens Telegram with /register_teacher
- *      (existing wizard).
- *
- * Inside Telegram (TWA) this whole screen is skipped — the user is already
- * authenticated via initData, and 14_app.js boots straight into the main UI.
+ * SCMS v11 — 00_landing.js (Fixed Token Mismatch Version)
  */
 
 'use strict';
 
 let _loginPollTimer = null;
-let _loginToken     = null;
 let _loginPollCount = 0;
+
+// Token ကို Memory ထဲတင်မကဘဲ LocalStorage မှာပါ အမြဲသိမ်းဆည်းထားမည့် Key
+const _TOKEN_CACHE_KEY = 'scms_active_login_token';
 
 /**
  * Decide whether the landing page should be shown.
- * Cases:
- *   • Running inside Telegram (TWA) → NO, skip to bootstrap
- *   • Have a saved session token in localStorage → NO, try silent login
- *   • Otherwise (cold native or web start) → YES, show landing
  */
 window.shouldShowLanding = function () {
   if (isTWA()) return false;
@@ -43,8 +21,7 @@ window.shouldShowLanding = function () {
 };
 
 /**
- * Render the landing screen into #bootScreen (replacing the spinner).
- * Called by 14_app.js before bootstrap runs.
+ * Render the landing screen into #bootScreen.
  */
 window.renderLanding = function () {
   const boot = document.getElementById('bootScreen');
@@ -98,7 +75,6 @@ window.renderLanding = function () {
         </div>
       </div>
 
-      <!-- Login pending sheet (slides up after Sign-in tap) -->
       <div class="login-pending" id="loginPending" style="display:none">
         <div class="login-pending-inner">
           <div class="login-pending-spinner"><div class="spin-ring"></div></div>
@@ -124,30 +100,32 @@ window.renderLanding = function () {
       </div>
 
     </div>`;
+
+  // အကယ်၍ Memory ထဲမှာ ပျောက်သွားပေမယ့် LocalStorage ထဲမှာ တင်ကျန်နေတဲ့ Poll လုပ်စရာရှိရင် ဆက်မောင်းရန်
+  const activeToken = localStorage.getItem(_TOKEN_CACHE_KEY);
+  if (activeToken) {
+    document.getElementById('loginPending').style.display = 'flex';
+    _startLoginPolling(activeToken);
+  }
 };
 
 /**
  * Kick off the Telegram login flow.
- *   • Generate a random token (UUID-ish)
- *   • Save it locally so we know what to poll for
- *   • Open Telegram with /start app_login_<token>
- *   • Start polling Supabase app_sessions table
  */
 window.startTelegramLogin = async function (isRetry) {
-  // Generate fresh token on first call; reuse on retry so the bot's earlier
-  // /start lands on the same session row.
-  if (!_loginToken || !isRetry) {
-    _loginToken = _generateToken();
+  let token = localStorage.getItem(_TOKEN_CACHE_KEY);
+
+  if (!token || !isRetry) {
+    token = _generateToken();
+    localStorage.setItem(_TOKEN_CACHE_KEY, token); // 💾 LocalStorage ထဲသို့ ချက်ချင်းသိမ်းဆည်းခြင်း
   }
   _loginPollCount = 0;
 
-  // 1) Pre-register an empty session row in Supabase so the bot can find it
-  //    by token. (If RLS prevents the anon insert, fall through — the bot
-  //    creates the row itself.)
-  await _preregisterSession(_loginToken).catch(() => { /* best effort */ });
+  // 1) Pre-register an empty session row in Supabase
+  await _preregisterSession(token).catch(() => { /* best effort */ });
 
   // 2) Build the deep link and open Telegram
-  const url = _buildLoginUrl(_loginToken);
+  const url = _buildLoginUrl(token);
   _openTelegram(url);
 
   // 3) Show the pending sheet
@@ -165,7 +143,7 @@ window.startTelegramLogin = async function (isRetry) {
   }
 
   // 4) Begin polling
-  _startLoginPolling(_loginToken);
+  _startLoginPolling(token);
 
   // 5) After 12 s, reveal the manual-copy fallback
   setTimeout(() => {
@@ -174,19 +152,15 @@ window.startTelegramLogin = async function (isRetry) {
   }, 12000);
 };
 
-/**
- * Open Telegram with a bot command (used for register flows).
- */
 window.openTelegramCommand = function (cmd) {
-  const bot = SCMS_CONFIG.BOT_USERNAME || 'YourSchoolBot';
-  // No start param — user types the command themselves (matches existing flow)
+  const bot = SCMS_CONFIG.BOT_USERNAME || 'VavidaISBbot'; // ဆရာ့ Bot Name သို့ ပြောင်းလဲထားပေးပါတယ်
   const url = `https://t.me/${bot}?start=${encodeURIComponent(cmd)}`;
   _openTelegram(url);
 };
 
 window.cancelTelegramLogin = function () {
   _stopLoginPolling();
-  _loginToken = null;
+  localStorage.removeItem(_TOKEN_CACHE_KEY); // Token အဟောင်းကို ရှင်းထုတ်ခြင်း
   const pending = document.getElementById('loginPending');
   if (pending) pending.style.display = 'none';
 };
@@ -196,25 +170,22 @@ window.cancelTelegramLogin = function () {
    ──────────────────────────────────────────────────────────────────────── */
 
 function _generateToken() {
-  // 16 random bytes → hex (32 chars). crypto if available, fallback otherwise.
+  // WebView အားလုံးမှာ Hex format ကွက်တိထွက်စေမယ့် ခိုင်မာသော Token Generator
   if (window.crypto?.getRandomValues) {
     const a = new Uint8Array(16);
     window.crypto.getRandomValues(a);
     return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
   }
-  return (Math.random().toString(36) + Date.now().toString(36)).replace(/\./g, '');
+  // Fallback: Crypto မပွင့်ထားတဲ့ WebView အတွက် သန့်စင်သော Hex ထုတ်ပေးနည်း
+  return Array.from({length: 32}, () => Math.floor(Math.random()*16).toString(16)).join('');
 }
 
 function _buildLoginUrl(token) {
-  const bot = SCMS_CONFIG.BOT_USERNAME || 'YourSchoolBot';
-  // Backend regex in Pre-Auth must match: /^\/start\s+app_login_([a-f0-9]+)/i
+  const bot = SCMS_CONFIG.BOT_USERNAME || 'VavidaISBbot'; // ဆရာ့ Bot Name သို့ ပြောင်းလဲထားပေးပါတယ်
   return `https://t.me/${bot}?start=app_login_${encodeURIComponent(token)}`;
 }
 
 function _openTelegram(url) {
-  // On native (Capacitor) we can use the system browser to hand off to TG.
-  // On web we can use window.open. tg:// scheme is the most reliable handoff
-  // when Telegram is installed.
   try {
     if (window.Capacitor?.Plugins?.Browser) {
       window.Capacitor.Plugins.Browser.open({ url });
@@ -222,14 +193,11 @@ function _openTelegram(url) {
     }
   } catch (e) { /* fall through */ }
 
-  // Try the tg:// scheme first for instant app handoff
   const tgScheme = url
     .replace('https://t.me/', 'tg://resolve?domain=')
     .replace('?start=', '&start=');
   try {
     window.location.href = tgScheme;
-    // If TG isn't installed, the page won't navigate. As a fallback after
-    // 800 ms open the https link in a new tab.
     setTimeout(() => { window.open(url, '_blank', 'noopener'); }, 800);
   } catch (e) {
     window.open(url, '_blank', 'noopener');
@@ -237,8 +205,6 @@ function _openTelegram(url) {
 }
 
 async function _preregisterSession(token) {
-  // Insert (or upsert) a placeholder row so the polling SELECT has something
-  // to find. The bot will fill in telegram_id + teacher_id on its side.
   const url = `${SCMS_CONFIG.SUPABASE_URL}/rest/v1/app_sessions`;
   const resp = await fetch(url, {
     method:  'POST',
@@ -255,8 +221,6 @@ async function _preregisterSession(token) {
       created_at: new Date().toISOString(),
     }),
   });
-  // 201 created or 200 merged is fine; 4xx means RLS blocked us — that's OK
-  // because the bot will create the row itself.
   return resp.ok;
 }
 
@@ -264,20 +228,20 @@ function _startLoginPolling(token) {
   _stopLoginPolling();
   _loginPollTimer = setInterval(async () => {
     _loginPollCount++;
-    // Stop after ~5 minutes
     if (_loginPollCount > 150) {
       _stopLoginPolling();
+      localStorage.removeItem(_TOKEN_CACHE_KEY);
       _setPendingSub('Timed out. Try again?');
       return;
     }
     try {
       const session = await _checkSession(token);
-      if (session && session.telegram_id) {
-        // ✓ Authenticated
+      // Status 'linked' ဖြစ်ပြီး တကယ့် ဆရာ ID ပါလာမှသာ လော့ဂင်ပေးဝင်မည်
+      if (session && session.status === 'linked' && session.telegram_id) {
         _stopLoginPolling();
+        localStorage.removeItem(_TOKEN_CACHE_KEY); // အောင်မြင်သွားပြီဖြစ်လို့ Polling Cache ဖြတ်မည်
         _saveSession(session);
         _setPendingSub('Signed in! Loading your school…');
-        // Hand back to 14_app.js bootstrap
         setTimeout(() => {
           if (typeof window.bootAfterLogin === 'function') window.bootAfterLogin();
           else window.location.reload();
@@ -327,7 +291,7 @@ function _saveSession(session) {
       teacher_name: session.teacher_name,
       saved_at:     Date.now(),
     }));
-  } catch (e) { /* localStorage might be disabled */ }
+  } catch (e) { /* localStorage disabled */ }
 }
 
 function _getSavedSession() {
